@@ -1,0 +1,490 @@
+{
+  "alert_threshold": 82,
+  "dashboard_threshold": 52,
+  "max_alert_age_hours": 24,
+  "dashboard_age_hours": 168,
+  "watch_interval_minutes": 15,
+  "local_regions": [
+    "your city",
+    "your state"
+  ],
+  "boards": [
+    {
+      "company": "Flock Safety",
+      "source": "ashby",
+      "board": "Flock Safety",
+      "enabled": true
+    },
+    {
+      "company": "Oura",
+      "source": "greenhouse",
+      "board": "oura",
+      "enabled": true
+    },
+    {
+      "company": "Pendo",
+      "source": "greenhouse",
+      "board": "pendo",
+      "enabled": true
+    },
+    {
+      "company": "Collibra",
+      "source": "greenhouse",
+      "board": "collibra",
+      "enabled": true
+    },
+    {
+      "company": "Webflow",
+      "source": "greenhouse",
+      "board": "webflow",
+      "enabled": true
+    },
+    {
+      "company": "Braze",
+      "source": "greenhouse",
+      "board": "braze",
+      "enabled": true
+    },
+    {
+      "company": "Intercom",
+      "source": "greenhouse",
+      "board": "intercom",
+      "enabled": true
+    },
+    {
+      "company": "Amplitude",
+      "source": "greenhouse",
+      "board": "amplitude",
+      "enabled": true
+    },
+    {
+      "company": "GitLab",
+      "source": "greenhouse",
+      "board": "gitlab",
+      "enabled": true
+    },
+    {
+      "company": "Datadog",
+      "source": "greenhouse",
+      "board": "datadog",
+      "enabled": true
+    },
+    {
+      "company": "Grafana Labs",
+      "source": "greenhouse",
+      "board": "grafanalabs",
+      "enabled": true
+    },
+    {
+      "company": "MongoDB",
+      "source": "greenhouse",
+      "board": "mongodb",
+      "enabled": true
+    },
+    {
+      "company": "Elastic",
+      "source": "greenhouse",
+      "board": "elastic",
+      "enabled": true
+    },
+    {
+      "company": "Anthropic",
+      "source": "greenhouse",
+      "board": "anthropic",
+      "enabled": true
+    },
+    {
+      "company": "Stripe",
+      "source": "greenhouse",
+      "board": "stripe",
+      "enabled": true
+    },
+    {
+      "company": "Stripe",
+      "source": "stripe_careers",
+      "board": "https://stripe.com/careers/search",
+      "enabled": true
+    },
+    {
+      "company": "PagerDuty",
+      "source": "greenhouse",
+      "board": "pagerduty",
+      "enabled": true
+    },
+    {
+      "company": "LaunchDarkly",
+      "source": "greenhouse",
+      "board": "launchdarkly",
+      "enabled": true
+    },
+    {
+      "company": "Calendly",
+      "source": "greenhouse",
+      "board": "calendly",
+      "enabled": true
+    },
+    {
+      "company": "Gusto",
+      "source": "greenhouse",
+      "board": "gusto",
+      "enabled": true
+    },
+    {
+      "company": "Reddit",
+      "source": "greenhouse",
+      "board": "reddit",
+      "enabled": true
+    },
+    {
+      "company": "Box",
+      "source": "greenhouse",
+      "board": "boxinc",
+      "enabled": true
+    },
+    {
+      "company": "Figma",
+      "source": "greenhouse",
+      "board": "figma",
+      "enabled": true
+    },
+    {
+      "company": "Iterable",
+      "source": "greenhouse",
+      "board": "iterable",
+      "enabled": true
+    },
+    {
+      "company": "New Relic",
+      "source": "greenhouse",
+      "board": "newrelic",
+      "enabled": true
+    },
+    {
+      "company": "Contentstack",
+      "source": "greenhouse",
+      "board": "contentstack",
+      "enabled": true
+    },
+    {
+      "company": "Vercel",
+      "source": "greenhouse",
+      "board": "vercel",
+      "enabled": true
+    },
+    {
+      "company": "Motive",
+      "source": "greenhouse",
+      "board": "gomotive",
+      "enabled": true
+    },
+    {
+      "company": "MaintainX",
+      "source": "greenhouse",
+      "board": "maintainx",
+      "enabled": false
+    },
+    {
+      "company": "Klaviyo",
+      "source": "greenhouse",
+      "board": "klaviyojobs",
+      "enabled": true
+    },
+    {
+      "company": "Twilio",
+      "source": "greenhouse",
+      "board": "twilio",
+      "enabled": true
+    },
+    {
+      "company": "Airtable",
+      "source": "greenhouse",
+      "board": "airtable",
+      "enabled": true
+    },
+    {
+      "company": "Cloudflare",
+      "source": "greenhouse",
+      "board": "cloudflare",
+      "enabled": true
+    },
+    {
+      "company": "Grammarly / Superhuman",
+      "source": "greenhouse",
+      "board": "grammarly",
+      "enabled": false
+    },
+    {
+      "company": "Algolia",
+      "source": "greenhouse",
+      "board": "algolia",
+      "enabled": true
+    },
+    {
+      "company": "Bandwidth",
+      "source": "greenhouse",
+      "board": "bandwidth",
+      "enabled": true
+    },
+    {
+      "company": "RVO Health",
+      "source": "greenhouse",
+      "board": "rvohealth",
+      "enabled": true
+    },
+    {
+      "company": "Boulevard",
+      "source": "greenhouse",
+      "board": "boulevard",
+      "enabled": true
+    },
+    {
+      "company": "GoFundMe",
+      "source": "greenhouse",
+      "board": "gofundme",
+      "enabled": true
+    },
+    {
+      "company": "Reltio",
+      "source": "greenhouse",
+      "board": "reltio",
+      "enabled": true
+    },
+    {
+      "company": "D3",
+      "source": "greenhouse",
+      "board": "d3",
+      "enabled": true
+    },
+    {
+      "company": "Contentful",
+      "source": "greenhouse",
+      "board": "contentful",
+      "enabled": true
+    },
+    {
+      "company": "dbt Labs",
+      "source": "greenhouse",
+      "board": "dbtlabsinc",
+      "enabled": false
+    },
+    {
+      "company": "CircleCI",
+      "source": "greenhouse",
+      "board": "circleci",
+      "enabled": true
+    },
+    {
+      "company": "Sprout Social",
+      "source": "greenhouse",
+      "board": "sproutsocialprospects",
+      "enabled": true
+    },
+    {
+      "company": "Postman",
+      "source": "greenhouse",
+      "board": "postman",
+      "enabled": true
+    },
+    {
+      "company": "Mixpanel",
+      "source": "greenhouse",
+      "board": "mixpanel",
+      "enabled": true
+    },
+    {
+      "company": "Maven Clinic",
+      "source": "greenhouse",
+      "board": "mavenclinic",
+      "enabled": true
+    },
+    {
+      "company": "Modern Health",
+      "source": "greenhouse",
+      "board": "modernhealth",
+      "enabled": true
+    },
+    {
+      "company": "Omada Health",
+      "source": "greenhouse",
+      "board": "omadahealth",
+      "enabled": true
+    },
+    {
+      "company": "Process Street",
+      "source": "greenhouse",
+      "board": "processstreet",
+      "enabled": true
+    },
+    {
+      "company": "Notion",
+      "source": "ashby",
+      "board": "notion",
+      "enabled": true
+    },
+    {
+      "company": "OpenAI",
+      "source": "ashby",
+      "board": "openai",
+      "enabled": true
+    },
+    {
+      "company": "Ramp",
+      "source": "ashby",
+      "board": "ramp",
+      "enabled": true
+    },
+    {
+      "company": "Linear",
+      "source": "ashby",
+      "board": "Linear",
+      "enabled": true
+    },
+    {
+      "company": "Perplexity",
+      "source": "ashby",
+      "board": "perplexity",
+      "enabled": true
+    },
+    {
+      "company": "Reflow",
+      "source": "ashby",
+      "board": "reflow",
+      "enabled": true
+    },
+    {
+      "company": "Common Room",
+      "source": "ashby",
+      "board": "commonroom",
+      "enabled": false
+    },
+    {
+      "company": "Omni",
+      "source": "ashby",
+      "board": "omni",
+      "enabled": true
+    },
+    {
+      "company": "Console",
+      "source": "ashby",
+      "board": "console",
+      "enabled": true
+    },
+    {
+      "company": "Highspot",
+      "source": "lever",
+      "board": "highspot",
+      "enabled": true
+    },
+    {
+      "company": "LaunchSquad",
+      "source": "lever",
+      "board": "launchsquad",
+      "enabled": true
+    },
+    {
+      "company": "Remote OK",
+      "source": "remoteok",
+      "board": "https://remoteok.com/api",
+      "enabled": true
+    },
+    {
+      "company": "ServiceNow",
+      "source": "smartrecruiters",
+      "board": "ServiceNow",
+      "enabled": true
+    },
+    {
+      "company": "Achieve",
+      "source": "smartrecruiters",
+      "board": "Achieve1",
+      "enabled": true
+    },
+    {
+      "company": "Revalize",
+      "source": "smartrecruiters",
+      "board": "Revalize",
+      "enabled": true
+    },
+    {
+      "company": "Sia / Ready Set Rocket",
+      "source": "smartrecruiters",
+      "board": "Sia",
+      "enabled": true
+    },
+    {
+      "company": "QAD / Redzone",
+      "source": "smartrecruiters",
+      "board": "QADInc",
+      "enabled": true
+    },
+    {
+      "company": "LinkedIn",
+      "source": "smartrecruiters",
+      "board": "LinkedIn3",
+      "enabled": true
+    },
+    {
+      "company": "Palo Alto Networks",
+      "source": "smartrecruiters",
+      "board": "PaloAltoNetworks2",
+      "enabled": true
+    },
+    {
+      "company": "SmartRecruiters",
+      "source": "smartrecruiters",
+      "board": "smartrecruiters",
+      "enabled": true
+    },
+    {
+      "company": "Mindlance",
+      "source": "smartrecruiters",
+      "board": "Mindlance2",
+      "enabled": true
+    },
+    {
+      "company": "Adobe",
+      "source": "workday",
+      "board": "https://adobe.wd5.myworkdayjobs.com/external_experienced",
+      "enabled": true
+    },
+    {
+      "company": "Salesforce",
+      "source": "workday",
+      "board": "https://salesforce.wd12.myworkdayjobs.com/External_Career_Site",
+      "enabled": true
+    },
+    {
+      "company": "NVIDIA",
+      "source": "workday",
+      "board": "https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite",
+      "enabled": true
+    },
+    {
+      "company": "SAS",
+      "source": "icims",
+      "board": "https://careers-sas.icims.com",
+      "enabled": true
+    },
+    {
+      "company": "Jobicy US Remote",
+      "source": "jobicy",
+      "board": "https://jobicy.com/api/v2/remote-jobs",
+      "enabled": true
+    },
+    {
+      "company": "Himalayas US Remote",
+      "source": "himalayas",
+      "board": "https://himalayas.app/jobs/api/search",
+      "enabled": true
+    },
+    {
+      "company": "We Work Remotely",
+      "source": "wwr",
+      "board": "https://weworkremotely.com/remote-jobs.rss",
+      "enabled": true
+    }
+  ],
+  "salary_floor": 75000,
+  "salary_target": 100000,
+  "contract_priority_bonus": 1
+}
