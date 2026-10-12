@@ -264,14 +264,15 @@ def score_job(job: Job, config: dict[str, Any]) -> Job:
 
 def apply_freshness(job: Job, config: dict[str, Any], *, board_initialized: bool, is_new: bool) -> Job:
     pub = parse_dt(job.published_at)
-    first = parse_dt(job.first_seen_at)
 
+    # Age measures original publication, NEVER when our crawler discovered the role.
+    # Discovery is a separate signal, particularly for sources without posted dates.
     if pub:
         job.discovery_status = "published"
         age = max(0.0, (now_utc() - pub).total_seconds() / 3600)
     elif board_initialized:
-        job.discovery_status = "new" if is_new else "new"
-        age = max(0.0, (now_utc() - first).total_seconds() / 3600) if first else None
+        job.discovery_status = "newly_discovered" if is_new else "previously_seen"
+        age = None
     else:
         job.discovery_status = "baseline"
         age = None
@@ -354,10 +355,14 @@ def apply_freshness(job: Job, config: dict[str, Any], *, board_initialized: bool
 
 def freshness_label(job: Job) -> str:
     if job.discovery_status == "baseline":
-        return "BASELINE"
+        return "BASELINE / DATE UNKNOWN"
+    if job.discovery_status == "newly_discovered":
+        return "NEWLY DISCOVERED / DATE UNKNOWN"
+    if job.discovery_status == "previously_seen":
+        return "PREVIOUSLY SEEN / DATE UNKNOWN"
     age = job.age_hours
     if age is None:
-        return "NEWLY SEEN"
+        return "POSTING DATE UNKNOWN"
     if age <= 3:
         return "🔥 NOW"
     if age <= 12:
