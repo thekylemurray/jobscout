@@ -25,10 +25,12 @@ class Job:
     risks: list[str] | None = None
     eligible: bool = True
     veto_reason: str = ""
-    discovery_status: str = "published"  # published | new | baseline
+    discovery_status: str = "published"  # published | newly_discovered | previously_seen | baseline
     fresh: bool = False
     role_lane: str = ""
     lane_confidence: int = 0
     score_breakdown: list[str] | None = None
     priority_reasons: list[str] | None = None
     also_found_on: list[str] | None = None
+    application_status: str = "unreviewed"
+    application_note: str = ""
