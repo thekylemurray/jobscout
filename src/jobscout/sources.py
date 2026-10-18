@@ -283,7 +283,7 @@ def _workday_posted_iso(text: str | None) -> str | None:
         return (now - timedelta(hours=int(m.group(1)))).isoformat()
     return None
 
-def workday_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any] | None = None) -> list[Job]:
+def workday_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any] | None = None, *, title_terms: list[str] | None = None) -> list[Job]:
     """Workday public CXS feed.
 
     The list endpoint is paged at exactly 20 records. To keep the 15-minute watch
@@ -317,7 +317,7 @@ def workday_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any
             title = j.get("title", "") or ""
             # Full detail pages are the expensive call. The title filter is intentionally
             # broad and includes all marketing/content/web/search/digital/experience titles.
-            if not title_might_be_relevant(title):
+            if not (has_any(title, title_terms) if title_terms is not None else title_might_be_relevant(title)):
                 continue
 
             ext = j.get("externalPath") or ""
@@ -372,10 +372,9 @@ def workday_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any
                 if x
             )
             remote_type = info.get("remote_type", "") or ""
-            workplace = "Remote" if (
+            workplace = "Hybrid" if has_term(remote_type, "hybrid") else "Remote" if (
                 has_term(remote_type, "remote")
                 or has_term(location, "remote")
-                or has_term(info.get("description", ""), "remote")
             ) else ""
 
             jid = info.get("req_id") or ext.rsplit("_", 1)[-1] or ext

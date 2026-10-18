@@ -36,7 +36,10 @@ def fetch_all(config: dict[str, Any], state: dict[str, Any], cache: dict[str, An
             if not func:
                 log.append(f"SKIP unknown source: {source} / {company}")
                 continue
-            raw = func(company, board, stamp, cache)
+            if source == "workday" and config.get("profile"):
+                raw = func(company, board, stamp, cache, title_terms=config["profile"]["title_terms"])
+            else:
+                raw = func(company, board, stamp, cache)
             log.append(f"OK {company} ({source}): {len(raw)} jobs")
         except urllib.error.HTTPError as e:
             log.append(f"FAIL {company} ({source}): HTTP {e.code}")
@@ -282,6 +285,10 @@ def run_once(paths: RuntimePaths, *, open_dashboard: bool = False, quiet: bool =
     if not paths.config.exists():
         raise FileNotFoundError(f"Missing {paths.config}. Copy config.example.json to config.json first.")
     config = load_json(paths.config, {})
+    from .config import validate_config
+    errors = validate_config(config)
+    if errors:
+        raise ValueError("; ".join(errors))
     state = load_json(paths.state, {"version": __version__, "jobs": {}, "boards": {}})
     cache = load_json(paths.cache, {})
     state["version"] = __version__

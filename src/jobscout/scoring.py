@@ -60,6 +60,9 @@ def core_group_hits_by_section(description: str) -> list[tuple[int, str, list[st
     return out
 
 def region_status(job: Job, config: dict[str, Any]) -> tuple[bool, str]:
+    if config.get("profile"):
+        from .profiles import profile_location
+        return profile_location(job, config)
     loc = as_text(job.location).lower().strip()
     workplace = as_text(job.workplace).lower().strip()
     combined = f"{loc} {workplace}".strip()
@@ -147,6 +150,9 @@ def adjacent_specialization_strength(title: str, description: str, term: str) ->
     return "supporting"
 
 def score_job(job: Job, config: dict[str, Any]) -> Job:
+    if config.get("profile"):
+        from .profiles import score_profile
+        return score_profile(job, config)
     title = as_text(job.title)
     description = as_text(job.description)
     text = f"{title}\n{description}"
@@ -330,7 +336,11 @@ def apply_freshness(job: Job, config: dict[str, Any], *, board_initialized: bool
             priority += 2
             why.append("remote +2")
 
-    lo, hi = parse_compensation_bounds(job.compensation)
+    if config.get("profile"):
+        from .profiles import annual_usd
+        lo, hi = annual_usd(as_text(job.compensation)) or (None, None)
+    else:
+        lo, hi = parse_compensation_bounds(job.compensation)
     floor = float(config.get("salary_floor", 75000))
     target = float(config.get("salary_target", 100000))
     if hi is not None and hi < floor:

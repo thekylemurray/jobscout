@@ -1,0 +1,39 @@
+name: Windows desktop
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'desktop/**']
+  pull_request:
+    paths: ['src/**', 'tests/**', 'packaging/**', '.github/workflows/windows-desktop.yml']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e ".[dev]" pyinstaller==6.22.3
+      - run: python -m pytest
+      - name: Build windowed executable
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name JobScout packaging/desktop_entry.py
+      - name: Smoke test native window
+        run: python packaging/smoke_desktop.py
+      - name: Check executable launches
+        shell: pwsh
+        run: |
+          $app = Start-Process dist/JobScout.exe -PassThru
+          Start-Sleep -Seconds 12
+          $app.Refresh()
+          if ($app.HasExited) { throw "JobScout exited unexpectedly" }
+          if ($app.MainWindowHandle -eq 0) { Stop-Process -Id $app.Id; throw "No desktop window found" }
+          Stop-Process -Id $app.Id
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JobScout-Windows
+          path: |
+            dist/JobScout.exe
+            docs/DESKTOP.md
+          retention-days: 30

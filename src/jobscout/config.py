@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from copy import deepcopy
 from typing import Any
 
@@ -38,6 +39,8 @@ def default_config() -> dict[str, Any]:
 def validate_config(config: dict[str, Any]) -> list[str]:
     """Return human-readable validation errors for a runtime configuration."""
     errors: list[str] = []
+    if not isinstance(config, dict):
+        return ["configuration must be an object"]
     required = {
         "alert_threshold",
         "dashboard_threshold",
@@ -57,6 +60,7 @@ def validate_config(config: dict[str, Any]) -> list[str]:
 
     if not isinstance(config.get("local_regions"), list):
         errors.append("config.local_regions must be a list")
+        return errors
 
     numeric_keys = [
         "alert_threshold",
@@ -80,4 +84,13 @@ def validate_config(config: dict[str, Any]) -> list[str]:
         if source and source not in SOURCE_FUNCS:
             errors.append(f"boards[{idx}].source is unknown: {source}")
 
+    if config.get("profile") is not None:
+        from .profiles import validate_profile
+        errors.extend(validate_profile(config["profile"]))
+        for key in ("salary_floor", "salary_target"):
+            value = config.get(key)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+                errors.append(f"{key} must be a nonnegative number")
+        if not all(isinstance(x, str) and x.strip() for x in config.get("local_regions", [])):
+            errors.append("local_regions must contain nonempty city names")
     return errors
