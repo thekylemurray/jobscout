@@ -24,12 +24,20 @@ jobs:
       - name: Check executable launches
         shell: pwsh
         run: |
-          $app = Start-Process dist/JobScout.exe -PassThru
-          Start-Sleep -Seconds 12
-          $app.Refresh()
-          if ($app.HasExited) { throw "JobScout exited unexpectedly" }
-          if ($app.MainWindowHandle -eq 0) { Stop-Process -Id $app.Id; throw "No desktop window found" }
-          Stop-Process -Id $app.Id
+          $exe = (Resolve-Path dist/JobScout.exe).Path
+          $app = Start-Process $exe -PassThru
+          # One-file PyInstaller starts a child process that owns the Tk window.
+          # Inspect the matching executable's windows, not just the bootloader PID.
+          $window = $null
+          for ($attempt = 0; $attempt -lt 15; $attempt++) {
+            Start-Sleep -Seconds 2
+            $window = Get-Process JobScout -ErrorAction SilentlyContinue | Where-Object {
+              $_.Path -eq $exe -and $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -like 'JobScout*'
+            }
+            if ($window) { break }
+          }
+          Get-Process JobScout -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe } | Stop-Process
+          if (-not $window) { throw "No JobScout desktop window found" }
       - uses: actions/upload-artifact@v4
         with:
           name: JobScout-Windows
