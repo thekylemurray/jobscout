@@ -227,14 +227,16 @@ def render_html(jobs: list[Job]) -> str:
             risk_block = f"<div class='risks'><strong>Watch:</strong><ul>{risks}</ul></div>" if risks else ""
             comp = f"<span>{html.escape(j.compensation)}</span>" if j.compensation else ""
             duplicate = f"<span>also: {html.escape(', '.join(j.also_found_on or []))}</span>" if j.also_found_on else ""
+            lane_label = f'{j.lane_confidence}% lane confidence' if j.lane_confidence else 'profile rules; review required'
+            fit_label = f'{j.fit_score}% fit' if j.lane_confidence else f'{j.fit_score}/100 fit score'
             cards.append(f"""
             <article class='card'>
-              <div class='scores'><div class='priority'>{j.priority_score}</div><small>priority</small><div class='fit'>{j.fit_score}% fit</div></div>
+              <div class='scores'><div class='priority'>{j.priority_score}</div><small>priority</small><div class='fit'>{fit_label}</div></div>
               <div class='body'>
                 <div class='topline'><span class='fresh'>{freshness_label(j)}</span><span class='age'>{age}</span><span class='source'>{html.escape(j.source)}</span></div>
                 <h2>{html.escape(j.title)}</h2>
                 <h3>{html.escape(j.company)}</h3>
-                <div class='lane'>{html.escape(j.role_lane)} <span>{j.lane_confidence}% lane confidence</span></div>
+                <div class='lane'>{html.escape(j.role_lane)} <span>{lane_label}</span></div>
                 <div class='meta'><span>{html.escape(j.location or 'Location not listed')}</span><span>{html.escape(j.workplace or '')}</span><span>{html.escape(as_text(j.employment_type) or '')}</span>{comp}{duplicate}</div>
                 <div class='grid'><div><strong>Why it matches</strong><ul>{reasons}</ul></div>{risk_block}</div>
                 <details><summary>Why these scores?</summary><div class='details-grid'><div><strong>Fit evidence</strong><ul>{breakdown}</ul></div><div><strong>Priority evidence</strong><ul>{pri}</ul></div></div></details>
