@@ -110,7 +110,7 @@ class Desktop:
         self.scan_button = ttk.Button(bottom, text='Search configured sources', command=self.scan)
         self.scan_button.pack(side='left')
         ttk.Button(bottom, text='Open results', command=self.results).pack(side='left', padx=8)
-        ttk.Button(bottom, text='View scan log', command=self.log).pack(side='left')
+        ttk.Button(bottom, text='Scan report / exclusions', command=self.log).pack(side='left')
         self.status = tk.StringVar(value='Import a search profile, or fill in preferences and save.')
         ttk.Label(root, textvariable=self.status, wraplength=950, padding=12).pack(fill='x')
         self.populate()
@@ -234,7 +234,7 @@ class Desktop:
         self.status.set('Searching configured feeds. Large employer boards can take several minutes…')
         def worker():
             try:
-                run_once(paths, quiet=True)
+                run_once(paths, quiet=True, progress=lambda message: self.messages.put(('progress', message)))
                 self.messages.put(('done', paths.log.read_text(encoding='utf-8')))
             except Exception as exc:
                 self.messages.put(('error', str(exc)))
@@ -243,6 +243,10 @@ class Desktop:
     def poll(self):
         try:
             kind, detail = self.messages.get_nowait()
+            if kind == 'progress':
+                self.status.set(detail)
+                self.root.after(200, self.poll)
+                return
             self.busy = False
             self.scan_button.state(['!disabled'])
             if kind == 'error':
@@ -250,7 +254,7 @@ class Desktop:
                 messagebox.showerror('Search failed', detail)
             else:
                 summary = [x for x in detail.splitlines() if x.startswith(('ELIGIBLE ', 'SOURCE_HEALTH '))]
-                self.status.set(' | '.join(summary) + '. Open results and check the scan log for feed failures.')
+                self.status.set(' | '.join(summary) + '. Open results; use Scan report / exclusions for coverage and rejected jobs.')
         except queue.Empty:
             pass
         self.root.after(200, self.poll)
@@ -259,7 +263,9 @@ class Desktop:
         self.open_file(RuntimePaths.from_home(self.path.parent).dashboard)
 
     def log(self):
-        self.open_file(RuntimePaths.from_home(self.path.parent).log)
+        paths = RuntimePaths.from_home(self.path.parent)
+        report = paths.output_dir / 'scan-report.html'
+        self.open_file(report if report.exists() else paths.log)
 
     def open_file(self, path):
         if path.exists():

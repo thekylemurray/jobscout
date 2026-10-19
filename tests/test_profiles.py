@@ -93,9 +93,41 @@ def test_workday_profile_filter_fetches_clinical_and_does_not_infer_remote(monke
                'externalPath': '/job/example/Director_123', 'locationsText': 'Boston, MA'}]}
     monkeypatch.setattr(sources, 'request_json_post', lambda *a, **k: payload)
     url = 'https://example.wd1.myworkdayjobs.com/wday/cxs/example/careers/job/example/Director_123'
-    cache = {url: dict(description='Lead remote teams for vaccines', location='Boston, MA',
+    cache = {url: dict(cache_version=2, description='Lead remote teams for vaccines', location='Boston, MA',
                       remote_type='Hybrid', employment_type='Full time')}
     args = ('Example', 'https://example.wd1.myworkdayjobs.com/en-US/careers', '2026-01-01', cache)
     assert sources.workday_jobs(*args) == []
     result = sources.workday_jobs(*args, title_terms=['clinical operations'])
     assert len(result) == 1 and result[0].workplace == 'Hybrid'
+
+
+def test_head_of_and_title_punctuation(profile_config):
+    p = profile_config['profile']
+    p['seniority_terms'] = ['director']
+    j = score_job(job(title='Head of Clinical-Operations'), profile_config)
+    assert j.eligible
+    assert any('verify scope' in x for x in j.risks)
+    assert not score_job(job(title='Manager, Clinical Operations'), profile_config).eligible
+
+
+def test_foreign_location_reason_includes_evidence(profile_config):
+    j = score_job(job(location='China - Beijing', workplace=''), profile_config)
+    assert not j.eligible and 'Beijing' in j.veto_reason
+
+
+def test_scan_report_includes_exclusions(tmp_path, monkeypatch, profile_config):
+    from jobscout.app import run_once
+    from jobscout.paths import RuntimePaths
+    profile_config['boards'] = [{'company': 'Example', 'source': 'greenhouse', 'board': 'example'}]
+    monkeypatch.setitem(sources.SOURCE_FUNCS, 'greenhouse', lambda *a: [job(location='Boston', workplace='Hybrid')])
+    write_config(tmp_path/'config.json', profile_config)
+    run_once(RuntimePaths.from_home(tmp_path), quiet=True)
+    report = (tmp_path/'output'/'scan-report.html').read_text()
+    assert 'Boston' in report and 'SOURCE_HEALTH OK 1 / FAIL 0' in report
+
+
+def test_salary_extraction_requires_annual_base_and_usd():
+    from jobscout.profiles import salary_from_description
+    assert salary_from_description('The annual base salary is listed. Pay transparency $225,000 - $240,000 USD') == 'USD 225,000-240,000 annual base'
+    assert salary_from_description('Annual bonus $25,000-$40,000 USD') == ''
+    assert salary_from_description('Annual base salary CAD 225000-240000') == ''

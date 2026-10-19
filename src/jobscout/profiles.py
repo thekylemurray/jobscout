@@ -50,6 +50,36 @@ def annual_usd(text: str) -> tuple[float, float] | None:
     return (min(nums), max(nums)) if nums else None
 
 
+def salary_from_description(description: str) -> str:
+    """Extract only explicit USD ranges near an annual base-salary statement."""
+    text = re.sub(r'\s+', ' ', description)
+    amount = r'\$?\s*(\d{2,3}(?:,\d{3})?(?:\.\d+)?[kK]?)'
+    pattern = re.compile(amount + r'\s*[-–—]\s*' + amount)
+    for match in pattern.finditer(text):
+        context = text[max(0, match.start()-600):match.end()+80]
+        if not re.search(r'annual\s+base\s+salary', context, re.I):
+            continue
+        nearby = text[max(0, match.start()-30):match.end()+30]
+        if not re.search(r'\bUSD\b|US\$', nearby, re.I):
+            continue
+        candidate = f'USD {match.group(1)}-{match.group(2)} annual base'
+        if annual_usd(candidate):
+            return candidate
+    return ''
+
+
+def title_matches(title: str, terms: list[str]) -> bool:
+    def normalize(value):
+        return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+    return has_any(normalize(title), [normalize(t) for t in terms])
+
+
+def seniority_matches(title: str, terms: list[str]) -> bool:
+    return not terms or has_any(title, terms) or (
+        has_term(title, 'head of') and any(t.lower() == 'director' for t in terms)
+    )
+
+
 def profile_location(job: Job, config: dict[str, Any]) -> tuple[bool, str]:
     loc = as_text(job.location).lower()
     work = as_text(job.workplace).lower()
@@ -57,16 +87,16 @@ def profile_location(job: Job, config: dict[str, Any]) -> tuple[bool, str]:
         return True, 'configured local region; confirm office attendance'
     # Hybrid must never inherit remote eligibility from a remote keyword.
     if has_any(work + ' ' + loc, ['hybrid', 'on-site', 'onsite', 'on site']):
-        return False, 'on-site or hybrid location outside configured cities'
+        return False, f'on-site or hybrid outside selected cities: {as_text(job.location)}'
     if not config['profile']['allow_remote']:
         return False, 'outside configured cities; remote disabled'
     if 'remote' not in work + ' ' + loc:
-        return False, 'location unclear or outside configured cities'
+        return False, f'location outside selected cities; no explicit remote eligibility: {as_text(job.location) or "not provided"}'
     if has_any(loc, ['united states', 'usa', 'u.s.', 'us', 'worldwide', 'anywhere', 'global']):
         return True, 'remote; verify eligibility from your home state and any restrictions'
     if loc.strip() in ('', 'remote', 'fully remote'):
         return True, 'remote eligibility unspecified; verify permitted states/countries'
-    return False, 'remote role restricted to another or unconfirmed location'
+    return False, f'remote role restricted to another or unconfirmed location: {as_text(job.location)}'
 
 
 def score_profile(job: Job, config: dict[str, Any]) -> Job:
@@ -88,10 +118,10 @@ def score_profile(job: Job, config: dict[str, Any]) -> Job:
         return reject('excluded employer')
     if has_any(title, p['excluded_title_terms']):
         return reject('excluded job function in title')
-    if not has_any(title, p['title_terms']):
+    if not title_matches(title, p['title_terms']):
         return reject('title outside selected career profile')
-    if p['seniority_terms'] and not has_any(title, p['seniority_terms']):
-        return reject('seniority outside selected levels')
+    if not seniority_matches(title, p['seniority_terms']):
+        return reject(f'seniority outside selected levels ({", ".join(p["seniority_terms"])}): {title}')
     if not p['allow_contract'] and has_any(as_text(job.employment_type) + ' ' + title,
                                          ['contract', 'contractor', 'temporary', 'freelance', 'fixed term']):
         return reject('contract or temporary employment excluded')
@@ -99,10 +129,14 @@ def score_profile(job: Job, config: dict[str, Any]) -> Job:
     if not allowed:
         return reject(location_reason)
     job.risks.append(location_reason)
+    if has_term(title, 'head of') and not has_any(title, p['seniority_terms']):
+        job.risks.append('Head of may be Director-equivalent; verify scope and compensation')
     if not as_text(job.employment_type).strip():
         job.risks.append('employment type missing; confirm permanent employment')
     if p['industry_terms'] and not has_any(desc, p['industry_terms']):
         job.risks.append('industry not established from posting; verify employer sector')
+    if not job.compensation:
+        job.compensation = salary_from_description(desc)
     salary = annual_usd(as_text(job.compensation))
     if salary and salary[1] < config['salary_floor']:
         return reject('explicit annual USD salary range below minimum')
@@ -113,7 +147,9 @@ def score_profile(job: Job, config: dict[str, Any]) -> Job:
     # Qualification matching is conservative: a degree mention can be preferred,
     # an alternative, or a requirement. Surface the clause rather than inventing eligibility.
     for term in matched_terms(desc, p['review_terms']):
-        job.risks.append(f'qualification to review: {term}')
+        clauses = re.split(r'[\n.!?;]+', desc)
+        evidence = next((x.strip() for x in clauses if has_term(x, term)), term)
+        job.risks.append(f'review {term}: {evidence[:260]}')
     hits = matched_terms(desc, p['core_skills'])
     job.fit_score = min(96, 50 + 6 * len(hits))
     job.lane_confidence = 0  # portable matcher does not estimate lane confidence

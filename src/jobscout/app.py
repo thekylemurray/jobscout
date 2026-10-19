@@ -7,6 +7,7 @@ import time
 import urllib.error
 import webbrowser
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from datetime import datetime
 from typing import Any
@@ -18,36 +19,49 @@ from .scoring import application_tier, apply_freshness, dedupe_jobs, freshness_l
 from .sources import SOURCE_FUNCS
 from .utils import as_text, has_any, iso_now, load_json, now_utc, save_json
 
-def fetch_all(config: dict[str, Any], state: dict[str, Any], cache: dict[str, Any], log: list[str]) -> tuple[list[Job], list[Job]]:
+def fetch_all(config: dict[str, Any], state: dict[str, Any], cache: dict[str, Any], log: list[str], progress=None) -> tuple[list[Job], list[Job]]:
     jobs: list[Job] = []
     rejected: list[Job] = []
     seen = state.setdefault("jobs", {})
     board_state = state.setdefault("boards", {})
 
-    for b in config.get("boards", []):
-        if not b.get("enabled", True):
-            continue
-        company, source, board = b["company"], b["source"], b["board"]
-        board_key = f"{source}:{board}"
-        initialized = bool((board_state.get(board_key) or {}).get("initialized"))
-        stamp = iso_now()
-        try:
-            func = SOURCE_FUNCS.get(source)
-            if not func:
-                log.append(f"SKIP unknown source: {source} / {company}")
-                continue
-            if source == "workday" and config.get("profile"):
-                raw = func(company, board, stamp, cache, title_terms=config["profile"]["title_terms"])
-            else:
-                raw = func(company, board, stamp, cache)
-            log.append(f"OK {company} ({source}): {len(raw)} jobs")
-        except urllib.error.HTTPError as e:
-            log.append(f"FAIL {company} ({source}): HTTP {e.code}")
-            continue
-        except Exception as e:
-            log.append(f"FAIL {company} ({source}): {type(e).__name__}: {e}")
-            continue
+    boards = [b for b in config.get("boards", []) if b.get("enabled", True)]
 
+    def fetch_board(b):
+        company, source, board = b["company"], b["source"], b["board"]
+        messages = []
+        if progress:
+            progress(f"Searching {company} ({source})…")
+        def source_progress(message):
+            if message.startswith(("COVERAGE ", "WARNING ")):
+                messages.append(message)
+            if progress:
+                progress(message)
+        try:
+            func = SOURCE_FUNCS[source]
+            if source == "workday" and config.get("profile"):
+                raw = func(company, board, iso_now(), cache,
+                           title_terms=config["profile"]["title_terms"],
+                           search_text=b.get("search_text", ""), progress=source_progress)
+            else:
+                raw = func(company, board, iso_now(), cache)
+            messages.append(f"OK {company} ({source}): {len(raw)} jobs")
+            return b, raw, messages, True
+        except Exception as exc:
+            messages.append(f"FAIL {company} ({source}): {type(exc).__name__}: {exc}")
+            return b, [], messages, False
+
+    # Network retrieval is bounded to three employer boards; scoring and state
+    # updates remain sequential. Each board's cache entries use distinct URLs.
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = [pool.submit(fetch_board, b) for b in boards]
+        fetched = [future.result() for future in as_completed(futures)]
+    for b, raw, messages, ok in fetched:
+        log.extend(messages)
+        if not ok:
+            continue
+        board_key = f"{b['source']}:{b['board']}"
+        initialized = bool((board_state.get(board_key) or {}).get("initialized"))
         for job in raw:
             prev = seen.get(job.uid)
             is_new = prev is None
@@ -156,6 +170,8 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
         "web", "website", "content", "seo", "aeo", "geo", "search", "digital",
         "communications", "editorial", "brand", "campaign", "cms", "experience"
     ]
+    if config.get("profile"):
+        near_terms = config["profile"]["title_terms"]
     near_misses = [
         j for j in rejected
         if has_any(j.title or "", near_terms)
@@ -282,7 +298,7 @@ def notify(alerts: list[Job], paths: RuntimePaths, open_dashboard: bool = True) 
         except Exception:
             pass
 
-def run_once(paths: RuntimePaths, *, open_dashboard: bool = False, quiet: bool = False) -> int:
+def run_once(paths: RuntimePaths, *, open_dashboard: bool = False, quiet: bool = False, progress=None) -> int:
     paths.ensure()
     if not paths.config.exists():
         raise FileNotFoundError(f"Missing {paths.config}. Copy config.example.json to config.json first.")
@@ -295,7 +311,7 @@ def run_once(paths: RuntimePaths, *, open_dashboard: bool = False, quiet: bool =
     cache = load_json(paths.cache, {})
     state["version"] = __version__
     log: list[str] = [f"JobScout v{__version__} run {iso_now()}"]
-    jobs, rejected = fetch_all(config, state, cache, log)
+    jobs, rejected = fetch_all(config, state, cache, log, progress=progress)
     alerts = write_outputs(jobs, rejected, config, state, paths)
     save_json(paths.state, state)
     save_json(paths.cache, cache)
@@ -312,6 +328,12 @@ def run_once(paths: RuntimePaths, *, open_dashboard: bool = False, quiet: bool =
     for reason, count in reason_counts.most_common(8):
         log.append(f"REJECT {count}: {reason}")
     paths.log.write_text("\n".join(log), encoding="utf-8")
+    rows = ''.join('<tr>' + ''.join('<td>' + html.escape(as_text(x)) + '</td>' for x in
+        (j.company, j.title, j.location, j.workplace, j.veto_reason)) + '</tr>' for j in rejected)
+    audit = '<!doctype html><meta charset="utf-8"><title>JobScout scan report</title><style>body{font:16px system-ui;margin:32px}td,th{padding:12px;text-align:left;border-bottom:1px solid #ccc}pre{white-space:pre-wrap}</style><h1>Scan coverage and exclusions</h1>'
+    audit += '<p>These are filtering decisions, not a claim that no suitable jobs exist. Inspect source failures and incomplete coverage below.</p>'
+    audit += '<pre>' + html.escape('\n'.join(log)) + '</pre><table><tr><th>Employer</th><th>Title</th><th>Location</th><th>Arrangement</th><th>Reason</th></tr>' + rows + '</table>'
+    (paths.output_dir / 'scan-report.html').write_text(audit, encoding='utf-8')
     if not quiet:
         enabled = sum(1 for b in config.get("boards", []) if b.get("enabled", True))
         print(f"Scanned {enabled} configured sources.")

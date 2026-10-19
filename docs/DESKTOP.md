@@ -33,3 +33,12 @@ Developers can run `python -m jobscout.desktop`. The GUI needs Tk, included with
 The executable is not code-signed. Windows may display an unknown-publisher warning. Distribute only an artifact from the expected repository and successful build; do not ask recipients to disable security software.
 
 Reference: https://pyinstaller.org/en/stable/operating-mode.html
+
+## Version 1.1 search improvements
+
+- Searches up to three employer boards concurrently and displays listing progress.
+- Workday sources may specify `search_text` to narrow retrieval at the employer endpoint. The scan report records that query, listing counts, title candidates, and detail failures. Query-limited retrieval is not exhaustive employer coverage.
+- **Scan report / exclusions** opens a readable report even if no jobs match, showing locations, work arrangements, and rejection reasons.
+- Head-of-function titles can be reviewed as possible Director equivalents; the app flags the scope for confirmation. Punctuation between title words no longer causes a missed match.
+- Qualification flags include a short excerpt so required specialties or degrees are easier to inspect.
+- Personal profile updates are supplied separately. Import the new profile file; replacing the executable alone does not change saved sources or preferences.
