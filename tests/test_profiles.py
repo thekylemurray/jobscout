@@ -145,3 +145,23 @@ def test_workday_skips_details_for_wrong_seniority_but_preserves_audit(monkeypat
         '2026-01-01', {}, title_terms=['clinical operations'], seniority_terms=['director'], progress=reports.append)
     assert len(result) == 1 and result[0].title == 'Clinical Operations Manager'
     assert 'detail_skipped_seniority=1' in reports[-1]
+
+
+@pytest.mark.parametrize('description', ['Doctoral level degree (PhD, MD, PharmD, PsyD) required.', 'Ph.D. required. Lead clinical operations.', 'Must hold a medical degree.'])
+def test_explicit_doctorate_excluded_when_enabled(profile_config, description):
+    profile_config['profile']['exclude_required_doctorate'] = True
+    j = score_job(job(description=description), profile_config)
+    assert not j.eligible and 'required doctorate' in j.veto_reason
+
+
+@pytest.mark.parametrize('description', ['PhD preferred. MPH accepted.', 'Bachelor degree or PhD required.', 'PhD or equivalent experience required.', 'PhD not required.', 'An MPH is required. The CEO holds a PhD.'])
+def test_doctorate_alternatives_remain_reviewable(profile_config, description):
+    profile_config['profile']['exclude_required_doctorate'] = True
+    assert score_job(job(description=description), profile_config).eligible
+
+
+def test_escaped_markup_doctorate_and_old_profile_compatibility(profile_config):
+    text = '&lt;p&gt;Doctoral level degree (PhD, MD) required&lt;/p&gt;'
+    assert score_job(job(description=text), profile_config).eligible
+    profile_config['profile']['exclude_required_doctorate'] = True
+    assert not score_job(job(description=text), profile_config).eligible

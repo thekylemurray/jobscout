@@ -5,7 +5,7 @@ import re
 from typing import Any
 
 from .models import Job
-from .utils import as_text, has_any, has_term, matched_terms
+from .utils import as_text, has_any, has_term, matched_terms, strip_html
 
 LIST_FIELDS = (
     'title_terms', 'seniority_terms', 'core_skills', 'industry_terms', 'excluded_title_terms',
@@ -34,7 +34,22 @@ def validate_profile(profile: Any) -> list[str]:
     for key in ('allow_contract', 'allow_remote'):
         if not isinstance(profile.get(key), bool):
             errors.append(f'{key} must be true or false')
+    if 'exclude_required_doctorate' in profile and not isinstance(profile['exclude_required_doctorate'], bool):
+        errors.append('exclude_required_doctorate must be true or false')
     return errors
+
+
+def required_doctorate(description: str) -> str:
+    """Recognize explicit requirements only; keep alternatives for human review."""
+    text = re.sub(r"\bPh\.?\s?D\.?", "PhD", description, flags=re.I)
+    text = re.sub(r"\bM\.D\.", "MD", text, flags=re.I)
+    degree = r"(?:doctoral(?:[- ]level)?(?: degree)?|doctorate|PhD|MD|medical degree|PharmD|PsyD)"
+    for clause in re.split(r"[.!?;]\s+|\n", text):
+        if re.search(r"preferred|desirable|not required|equivalent|bachelor|master|\bMPH\b|\bBS\b|\bBA\b|\bMS\b|\bRN\b", clause, re.I):
+            continue
+        if re.search(degree + r"[^.!?;]{0,100}\b(?:required|mandatory)\b", clause, re.I) or re.search(r"\b(?:requires|must (?:have|hold|possess))\b[^.!?;]{0,70}" + degree, clause, re.I):
+            return clause.strip()[:300]
+    return ''
 
 
 def annual_usd(text: str) -> tuple[float, float] | None:
@@ -101,7 +116,7 @@ def profile_location(job: Job, config: dict[str, Any]) -> tuple[bool, str]:
 
 def score_profile(job: Job, config: dict[str, Any]) -> Job:
     p = config['profile']
-    title, desc = as_text(job.title), as_text(job.description)
+    title, desc = as_text(job.title), strip_html(strip_html(as_text(job.description)))
     job.reasons, job.risks, job.score_breakdown = [], [], []
     job.role_lane = p['name']
     job.fit_score = job.priority_score = 0
@@ -125,6 +140,10 @@ def score_profile(job: Job, config: dict[str, Any]) -> Job:
     if not p['allow_contract'] and has_any(as_text(job.employment_type) + ' ' + title,
                                          ['contract', 'contractor', 'temporary', 'freelance', 'fixed term']):
         return reject('contract or temporary employment excluded')
+    if p.get('exclude_required_doctorate'):
+        evidence = required_doctorate(desc)
+        if evidence:
+            return reject('explicit required doctorate: ' + evidence)
     allowed, location_reason = profile_location(job, config)
     if not allowed:
         return reject(location_reason)

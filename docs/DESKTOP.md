@@ -42,3 +42,10 @@ Reference: https://pyinstaller.org/en/stable/operating-mode.html
 - Head-of-function titles can be reviewed as possible Director equivalents; the app flags the scope for confirmation. Punctuation between title words no longer causes a missed match.
 - Qualification flags include a short excerpt so required specialties or degrees are easier to inspect.
 - Personal profile updates are supplied separately. Import the new profile file; replacing the executable alone does not change saved sources or preferences.
+
+## Version 1.2 qualification review
+
+- Optional **Exclude explicit doctorate requirements** blocks clearly mandatory doctoral qualifications. Preferred degrees, equivalent-experience language, and bachelor/master/nursing alternatives remain for review. This is conservative text matching, not a complete qualification assessment.
+- Portable profiles normalize escaped HTML before salary and qualification checks.
+- Preference checkboxes now sit below all salary fields.
+- Broad employer coverage can take considerably longer to scan. Each report records the actual sources, queries, counts, failures and exclusions; it does not certify a complete market search.

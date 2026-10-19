@@ -74,9 +74,12 @@ class Desktop:
             ttk.Entry(form, textvariable=var).grid(row=i, column=1, sticky='ew', padx=12)
         form.columnconfigure(1, weight=1)
         self.remote, self.contract = tk.BooleanVar(), tk.BooleanVar()
-        ttk.Checkbutton(form, text='Consider remote roles (verify state eligibility)', variable=self.remote).grid(row=12, column=0, columnspan=2, sticky='w')
-        ttk.Checkbutton(form, text='Consider contract / temporary roles', variable=self.contract).grid(row=13, column=0, columnspan=2, sticky='w')
-        ttk.Label(form, text='Scores are keyword-based review aids, not hiring probabilities.\nMissing salary, degree alternatives, benefits and location restrictions need human review.', wraplength=800).grid(row=14, column=0, columnspan=2, sticky='w', pady=12)
+        self.no_doctorate = tk.BooleanVar()
+        option_row = len(labels)
+        ttk.Checkbutton(form, text='Consider remote roles (verify state eligibility)', variable=self.remote).grid(row=option_row, column=0, columnspan=2, sticky='w')
+        ttk.Checkbutton(form, text='Consider contract / temporary roles', variable=self.contract).grid(row=option_row+1, column=0, columnspan=2, sticky='w')
+        ttk.Checkbutton(form, text='Exclude explicit doctorate requirements (keep preferred/alternative degrees for review)', variable=self.no_doctorate).grid(row=option_row+2, column=0, columnspan=2, sticky='w')
+        ttk.Label(form, text='Scores are keyword-based review aids, not hiring probabilities.\nMissing salary, degree alternatives, benefits and location restrictions need human review.', wraplength=800).grid(row=option_row+3, column=0, columnspan=2, sticky='w', pady=12)
         sources = ttk.Frame(self.tabs, padding=12)
         self.tabs.add(sources, text='Job sources')
         ttk.Label(sources, text='Search covers only these configured feeds. It does not search all of LinkedIn or the web.\nYou can also evaluate a posting copied from any job site in the next tab.', wraplength=850).pack(anchor='w')
@@ -130,6 +133,7 @@ class Desktop:
             var.set('; '.join(val) if isinstance(val, list) else str(val))
         self.remote.set(p['allow_remote'])
         self.contract.set(p['allow_contract'])
+        self.no_doctorate.set(p.get('exclude_required_doctorate', False))
         self.refresh_sources()
 
     def refresh_sources(self):
@@ -150,6 +154,7 @@ class Desktop:
             else:
                 c['profile'][key] = text
         c['profile']['allow_remote'], c['profile']['allow_contract'] = self.remote.get(), self.contract.get()
+        c['profile']['exclude_required_doctorate'] = self.no_doctorate.get()
         errors = validate_config(c)
         if errors:
             raise ValueError('\n'.join(errors))
