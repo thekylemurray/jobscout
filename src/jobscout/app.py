@@ -40,10 +40,15 @@ def fetch_all(config: dict[str, Any], state: dict[str, Any], cache: dict[str, An
         try:
             func = SOURCE_FUNCS[source]
             if source == "workday" and config.get("profile"):
-                raw = func(company, board, iso_now(), cache,
-                           title_terms=config["profile"]["title_terms"],
-                           search_text=b.get("search_text", ""), progress=source_progress,
-                           seniority_terms=config["profile"]["seniority_terms"])
+                queries = b.get("search_texts") or [b.get("search_text", "")]
+                by_uid = {}
+                for query in queries:
+                    for job in func(company, board, iso_now(), cache,
+                                    title_terms=config["profile"]["title_terms"],
+                                    search_text=query, progress=source_progress,
+                                    seniority_terms=config["profile"]["seniority_terms"]):
+                        by_uid[job.uid] = job
+                raw = list(by_uid.values())
             else:
                 raw = func(company, board, iso_now(), cache)
             messages.append(f"OK {company} ({source}): {len(raw)} jobs")

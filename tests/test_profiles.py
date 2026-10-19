@@ -165,3 +165,18 @@ def test_escaped_markup_doctorate_and_old_profile_compatibility(profile_config):
     assert score_job(job(description=text), profile_config).eligible
     profile_config['profile']['exclude_required_doctorate'] = True
     assert not score_job(job(description=text), profile_config).eligible
+
+
+def test_workday_multiple_queries_deduplicate_before_scoring(monkeypatch, profile_config):
+    from jobscout.app import fetch_all
+    queries = []
+    def fake(*a, **kw):
+        queries.append(kw['search_text'])
+        return [job()]
+    monkeypatch.setitem(sources.SOURCE_FUNCS, 'workday', fake)
+    profile_config['boards'] = [dict(company='Example', source='workday', board='example', search_texts=['director', 'head'])]
+    eligible, rejected = fetch_all(profile_config, {}, {}, [])
+    assert queries == ['director', 'head']
+    assert len(eligible) == 1 and not rejected
+    profile_config['boards'][0]['search_texts'] = 'director'
+    assert validate_config(profile_config)

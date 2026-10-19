@@ -49,3 +49,5 @@ Reference: https://pyinstaller.org/en/stable/operating-mode.html
 - Portable profiles normalize escaped HTML before salary and qualification checks.
 - Preference checkboxes now sit below all salary fields.
 - Broad employer coverage can take considerably longer to scan. Each report records the actual sources, queries, counts, failures and exclusions; it does not certify a complete market search.
+
+Workday profiles may use `search_texts` for several queries per board. Results are combined by posting ID before scoring. For a Director-level search, `director` and `head` avoid requiring the word `clinical` in the source query; the career-title filter still applies. Each query has separate coverage diagnostics.

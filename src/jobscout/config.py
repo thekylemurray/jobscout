@@ -80,6 +80,8 @@ def validate_config(config: dict[str, Any]) -> list[str]:
         for key in ("company", "source", "board"):
             if not board.get(key):
                 errors.append(f"boards[{idx}].{key} is required")
+        if "search_texts" in board and (not isinstance(board["search_texts"], list) or not board["search_texts"] or any(not isinstance(q, str) or not q.strip() for q in board["search_texts"])):
+            errors.append(f"boards[{idx}].search_texts must be nonempty search phrases")
         source = board.get("source")
         if source and source not in SOURCE_FUNCS:
             errors.append(f"boards[{idx}].source is unknown: {source}")
