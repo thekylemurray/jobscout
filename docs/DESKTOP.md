@@ -9,7 +9,7 @@ This preview adds a native window and separate search profiles to JobScout. Each
 3. Choose **Import profile** and select the supplied JSON file. This copies preferences into a separate local profile; there is no code to edit. Alternatively, fill out the Search preferences form and Save.
 4. Review **Job sources**. Only the configured, enabled feeds are searched. Add or remove sources using the form. Workday needs the employer's full careers board URL; Greenhouse and Lever use a board token.
 5. Select **Search configured sources**. Large boards can take several minutes. Keep the app open until it finishes.
-6. Review source health, then **Open results**. Check **View scan log** if a feed failed. No matches from failed feeds does not mean those employers have no vacancies.
+6. Review source health, then **Open results**. Check **Scan report / exclusions** for coverage and filtering details. No matches from failed feeds does not mean those employers have no vacancies.
 7. Use **Check a posting** to paste a job found on LinkedIn, a company website, or elsewhere. Enter the location and work arrangement as advertised. The result opens in your browser.
 
 Use **Open saved profile** to reopen a profile on a later visit. Profiles are stored in `%LOCALAPPDATA%\JobScout\profiles`, each with its own search history and reports. **New profile** starts a separate search. Importing an existing profile again creates another copy. Save before switching profiles. Personal profiles and résumés are not bundled into the executable or public repository.
