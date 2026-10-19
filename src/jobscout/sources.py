@@ -283,7 +283,7 @@ def _workday_posted_iso(text: str | None) -> str | None:
         return (now - timedelta(hours=int(m.group(1)))).isoformat()
     return None
 
-def workday_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any] | None = None, *, title_terms: list[str] | None = None, search_text: str = "", progress=None) -> list[Job]:
+def workday_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any] | None = None, *, title_terms: list[str] | None = None, search_text: str = "", progress=None, seniority_terms: list[str] | None = None) -> list[Job]:
     """Workday public CXS feed.
 
     The list endpoint is paged at exactly 20 records. To keep the 15-minute watch
@@ -298,6 +298,7 @@ def workday_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any
     out: list[Job] = []
     total: int | None = None
     detail_failures = 0
+    detail_skipped = 0
 
     while True:
         data = request_json_post(
@@ -329,7 +330,12 @@ def workday_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any
             public_url = f"{origin}/{locale}/{site}{ext}"
             cached = cache.get(detail_url) or {}
 
-            if cached.get("description") and cached.get("cache_version") == 2:
+            from .profiles import seniority_matches
+            if seniority_terms and not seniority_matches(title, seniority_terms):
+                detail_skipped += 1
+                info = {"location": j.get("locationsText") or "", "description": "",
+                        "additional_locations": "", "employment_type": "", "remote_type": ""}
+            elif cached.get("description") and cached.get("cache_version") == 2:
                 info = cached
             else:
                 try:
@@ -409,7 +415,7 @@ def workday_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any
             break
 
     if progress:
-        progress(f"COVERAGE {company}: query={search_text or 'all'}; inspected={offset}; reported={total}; candidates={len(out)}; detail_failures={detail_failures}")
+        progress(f"COVERAGE {company}: query={search_text or 'all'}; inspected={offset}; reported={total}; candidates={len(out)}; detail_failures={detail_failures}; detail_skipped_seniority={detail_skipped}")
         if total and offset < total:
             progress(f"WARNING {company}: incomplete listing coverage ({offset}/{total})")
     return out

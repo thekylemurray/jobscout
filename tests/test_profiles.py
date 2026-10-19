@@ -131,3 +131,17 @@ def test_salary_extraction_requires_annual_base_and_usd():
     assert salary_from_description('The annual base salary is listed. Pay transparency $225,000 - $240,000 USD') == 'USD 225,000-240,000 annual base'
     assert salary_from_description('Annual bonus $25,000-$40,000 USD') == ''
     assert salary_from_description('Annual base salary CAD 225000-240000') == ''
+
+
+def test_workday_skips_details_for_wrong_seniority_but_preserves_audit(monkeypatch):
+    payload = {'total': 1, 'jobPostings': [{'title': 'Clinical Operations Manager',
+               'externalPath': '/job/example/Manager_456', 'locationsText': 'Example City'}]}
+    monkeypatch.setattr(sources, 'request_json_post', lambda *a, **k: payload)
+    def no_details(*a, **k):
+        raise AssertionError('Should not request details for a clearly wrong level')
+    monkeypatch.setattr(sources.urllib.request, 'urlopen', no_details)
+    reports = []
+    result = sources.workday_jobs('Example', 'https://example.wd1.myworkdayjobs.com/en-US/careers',
+        '2026-01-01', {}, title_terms=['clinical operations'], seniority_terms=['director'], progress=reports.append)
+    assert len(result) == 1 and result[0].title == 'Clinical Operations Manager'
+    assert 'detail_skipped_seniority=1' in reports[-1]
