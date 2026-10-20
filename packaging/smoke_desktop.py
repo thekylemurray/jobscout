@@ -45,11 +45,11 @@ with tempfile.TemporaryDirectory() as tmp:
         canvas.yview_moveto(1.0)
         root.update()
         assert canvas.yview()[1] > 0.99
-    root.destroy()
+    app.close()
     root = tk.Tk()
     restored = Desktop(root, home)
     root.update()
-    assert restored.path == saved_path
+    assert restored.path.samefile(saved_path), f'Restored {restored.path} differs from {saved_path}'
     assert restored.fields['name'].get() == 'Synthetic smoke test'
     assert restored.config['profile']['salary_overrides']['https://example.org/jobs/1']['annual_max'] == 230000
     assert 'UTC' in restored.last_scan.get()
@@ -57,5 +57,5 @@ with tempfile.TemporaryDirectory() as tmp:
     restored.salary_mode.set('Ignore annual-period inference')
     restored.save_salary()
     assert json.loads(saved_path.read_text())['profile']['salary_overrides']['https://example.org/jobs/1'] == {'ignore_inference': True}
-    root.destroy()
+    restored.close()
 print('Fresh-profile handoff checks passed')

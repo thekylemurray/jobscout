@@ -181,7 +181,7 @@ class Desktop:
                 self.status.set('Previous profile unavailable. Import or open a saved profile.')
         self.populate()
         root.protocol('WM_DELETE_WINDOW', self.close)
-        root.after(200, self.poll)
+        self.poll_timer = root.after(200, self.poll)
 
     def available(self):
         if self.busy:
@@ -369,7 +369,7 @@ class Desktop:
             kind, detail = self.messages.get_nowait()
             if kind == 'progress':
                 self.status.set(detail)
-                self.root.after(200, self.poll)
+                self.poll_timer = self.root.after(200, self.poll)
                 return
             self.busy = False
             self.scan_button.state(['!disabled'])
@@ -382,7 +382,7 @@ class Desktop:
                 self.status.set(' | '.join(summary) + '. Open results; use Scan report / exclusions for coverage and rejected jobs.')
         except queue.Empty:
             pass
-        self.root.after(200, self.poll)
+        self.poll_timer = self.root.after(200, self.poll)
 
     def results_folder(self):
         folder = RuntimePaths.from_home(self.path.parent).output_dir
@@ -432,6 +432,7 @@ class Desktop:
         if self.busy:
             messagebox.showinfo('Search in progress', 'Please wait for the search to finish before closing.')
             return
+        self.root.after_cancel(self.poll_timer)
         self.root.destroy()
 
 
