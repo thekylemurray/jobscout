@@ -180,3 +180,12 @@ def test_workday_multiple_queries_deduplicate_before_scoring(monkeypatch, profil
     assert len(eligible) == 1 and not rejected
     profile_config['boards'][0]['search_texts'] = 'director'
     assert validate_config(profile_config)
+
+
+@pytest.mark.parametrize('description', [
+    'Required Skills: MD/DO (or international equivalent) or PharmD with relevant experience required.',
+    'Basic Qualifications: MD or DO degree from an accredited medical school AND 2 years of research. Preferred Qualifications: leadership.',
+])
+def test_mandatory_medical_credentials_are_not_experience_alternatives(profile_config, description):
+    profile_config['profile']['exclude_required_doctorate'] = True
+    assert not score_job(job(description=description), profile_config).eligible

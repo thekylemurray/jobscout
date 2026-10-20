@@ -43,12 +43,16 @@ def required_doctorate(description: str) -> str:
     """Recognize explicit requirements only; keep alternatives for human review."""
     text = re.sub(r"\bPh\.?\s?D\.?", "PhD", description, flags=re.I)
     text = re.sub(r"\bM\.D\.", "MD", text, flags=re.I)
-    degree = r"(?:doctoral(?:[- ]level)?(?: degree)?|doctorate|PhD|MD|medical degree|PharmD|PsyD)"
-    for clause in re.split(r"[.!?;]\s+|\n", text):
-        if re.search(r"preferred|desirable|not required|equivalent|bachelor|master|\bMPH\b|\bBS\b|\bBA\b|\bMS\b|\bRN\b", clause, re.I):
+    degree = r"(?:doctoral(?:[- ]level)?(?: degree)?|doctorate|PhD|MD|DO degree|medical degree|PharmD|PsyD)"
+    for clause in re.split(r"[.!?;]\s+|\n|(?=Preferred (?:Qualifications|Skills))", text, flags=re.I):
+        if re.search(r"preferred|desirable|not required|equivalent experience|bachelor|master|\bMPH\b|\bBS\b|\bBA\b|\bMS\b|\bRN\b", clause, re.I):
             continue
         if re.search(degree + r"[^.!?;]{0,100}\b(?:required|mandatory)\b", clause, re.I) or re.search(r"\b(?:requires|must (?:have|hold|possess))\b[^.!?;]{0,70}" + degree, clause, re.I):
             return clause.strip()[:300]
+        # A basic/minimum qualification is mandatory even without "required".
+        mandatory = re.split(r"preferred (?:qualifications|skills)", clause, flags=re.I)[0]
+        if re.search(r"(?:basic|minimum) qualifications?\s*:\s*" + degree + r"\b", mandatory, re.I):
+            return mandatory.strip()[:300]
     return ''
 
 
