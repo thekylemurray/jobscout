@@ -94,8 +94,11 @@ def check_application(job, timeout: int = 8):
     employer_application = False
     if job.source in {"remoteok", "jobicy", "himalayas", "wwr"}:
         application = job.apply_url or ""
-        host = (urllib.parse.urlsplit(application).hostname or "").lower()
-        if _safe_public_url(application) and host and not any(
+        if _safe_public_url(application):
+            host = (urllib.parse.urlsplit(application).hostname or "").lower()
+        else:
+            host = ""
+        if host and not any(
                 host == root or host.endswith("." + root) for root in aggregator_hosts):
             original = application
             employer_application = True
