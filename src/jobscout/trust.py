@@ -73,8 +73,10 @@ def reconcile_requisition(job: Job, state: dict, *, seen_at: str | None = None) 
         original_pub = record.get("first_published_at")
         if not original_pub or (parse_dt(original_pub) and parse_dt(job.published_at) < parse_dt(original_pub)):
             record["first_published_at"] = job.published_at
+            record["first_published_basis"] = job.publication_basis or ("feed_timestamp" if job.source in {"remoteok", "jobicy", "himalayas", "wwr"} else "employer_timestamp")
     if record.get("first_published_at"):
         job.published_at = record["first_published_at"]
+        job.publication_basis = record.get("first_published_basis") or job.publication_basis
     job.history_key = key
     legacy.setdefault(job.uid, {"first_seen_at": first, "alerted": record["alerted"]})
     return is_new
