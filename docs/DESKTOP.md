@@ -51,3 +51,13 @@ Reference: https://pyinstaller.org/en/stable/operating-mode.html
 - Broad employer coverage can take considerably longer to scan. Each report records the actual sources, queries, counts, failures and exclusions; it does not certify a complete market search.
 
 Workday profiles may use `search_texts` for several queries per board. Results are combined by posting ID before scoring. For a Director-level search, `director` and `head` avoid requiring the word `clinical` in the source query; the career-title filter still applies. Each query has separate coverage diagnostics.
+
+### Version 1.3 scoring corrections
+
+Portable profiles recognize a small, auditable set of equivalent skill phrases (for example budgets/budgeting, CRO/vendor management, global clinical trials, and numeric/Roman clinical phases). Each configured category earns six points once; matching several aliases does not increase its weight. The base 50 and cap of 96 are unchanged. Match explanations include the wording found. Unconfigured categories never earn points, and arbitrary custom skills retain exact matching.
+
+Known Maryland city/state references no longer trigger MD degree review warnings. Mandatory qualification and location rules remain in effect.
+
+A labeled USD `Pay Range` in a full-time posting can now be treated as annual when the period is unstated and both bounds exceed $10,000. The inferred period is explicitly recorded in compensation, risks and any below-floor rejection. Hourly/monthly/weekly, total-pay, bonus, non-USD, and non-full-time cases are not inferred. This is a narrow heuristic and should be checked in the rejection report if pay terms are ambiguous.
+
+Fit measures recognized experience signals, not a probability or percentage of qualification. Priority additionally considers freshness. These corrections may raise or lower scores; they do not establish that a candidate meets every requirement. Existing profiles work without reimporting.

@@ -5,6 +5,7 @@ import re
 from typing import Any
 
 from .models import Job
+from .profile_signals import skill_signals, credential_review_text, labeled_full_time_pay
 from .utils import as_text, has_any, has_term, matched_terms, strip_html
 
 LIST_FIELDS = (
@@ -166,23 +167,30 @@ def score_profile(job: Job, config: dict[str, Any]) -> Job:
     if not job.compensation:
         job.compensation = salary_from_description(desc)
     salary = annual_usd(as_text(job.compensation))
+    if not salary:
+        inferred = labeled_full_time_pay(desc, job.employment_type)
+        if inferred:
+            job.compensation = inferred
+            salary = annual_usd(inferred)
+            job.risks.append("pay period inferred as annual from labeled full-time USD pay range; verify")
     if salary and salary[1] < config['salary_floor']:
-        return reject('explicit annual USD salary range below minimum')
+        return reject('USD salary range below minimum' + (' (annual period inferred)' if 'period inferred' in as_text(job.compensation) else ' (explicit annual)'))
     if not salary:
         job.risks.append('annual USD base salary unverified; confirm compensation')
     elif salary[0] < config['salary_floor']:
         job.risks.append('salary range overlaps minimum; acceptable offer not assured')
     # Qualification matching is conservative: a degree mention can be preferred,
     # an alternative, or a requirement. Surface the clause rather than inventing eligibility.
-    for term in matched_terms(desc, p['review_terms']):
-        clauses = re.split(r'[\n.!?;]+', desc)
+    review_text = credential_review_text(desc)
+    for term in matched_terms(review_text, p['review_terms']):
+        clauses = re.split(r'[\n.!?;]+', review_text)
         evidence = next((x.strip() for x in clauses if has_term(x, term)), term)
         job.risks.append(f'review {term}: {evidence[:260]}')
-    hits = matched_terms(desc, p['core_skills'])
+    hits = skill_signals(desc, p['core_skills'])
     job.fit_score = min(96, 50 + 6 * len(hits))
     job.lane_confidence = 0  # portable matcher does not estimate lane confidence
-    job.reasons = ['target title matched'] + [f'experience signal: {x}' for x in hits[:7]]
-    job.score_breakdown = ['target title +50', f'{len(hits)} skill signals +{6 * len(hits)} (cap 96)']
+    job.reasons = ['target title matched'] + [f'experience signal: {category} (matched: {evidence})' for category, evidence in hits.items()]
+    job.score_breakdown = ['target title +50', f'{len(hits)} distinct skill categories +{6 * len(hits)} (cap 96)']
     if any(has_term(job.company, x) for x in p['preferred_companies']):
         job.reasons.append('preferred employer')
     return job

@@ -195,3 +195,15 @@ def test_required_doctorate_before_unrelated_preferred_skill(profile_config):
     profile_config['profile']['exclude_required_doctorate'] = True
     text = 'Requirements: Doctoral level degree (PhD, MD, PharmD, PsyD) required 8+ years of clinical development experience Experience in CNS strongly preferred'
     assert not score_job(job(description=text), profile_config).eligible
+
+
+def test_labeled_pay_below_floor_is_excluded_with_inference(profile_config):
+    profile_config['salary_floor'] = 200000
+    j = score_job(job(description='Pay Range: $160,000-$180,000 USD Benefits: medical.'), profile_config)
+    assert not j.eligible and 'annual period inferred' in j.veto_reason
+    assert '160000-180000' in j.compensation
+
+
+def test_md_city_does_not_generate_review_warning(profile_config):
+    j = score_job(job(description='Biotech vaccines. Office in Rockville, MD.'), profile_config)
+    assert not any('review MD:' in risk for risk in j.risks)
