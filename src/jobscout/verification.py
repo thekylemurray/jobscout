@@ -88,6 +88,17 @@ def check_application(job, timeout: int = 8):
     job.availability_checked_at = iso_now()
     job.availability_note = "Could not independently verify this exact application."
     original = job.job_url or job.apply_url
+    # For aggregator discoveries, check the employer application if one exists.
+    aggregator_hosts = ("remoteok.com", "jobicy.com", "himalayas.app",
+                        "weworkremotely.com")
+    employer_application = False
+    if job.source in {"remoteok", "jobicy", "himalayas", "wwr"}:
+        application = job.apply_url or ""
+        host = (urllib.parse.urlsplit(application).hostname or "").lower()
+        if _safe_public_url(application) and host and not any(
+                host == root or host.endswith("." + root) for root in aggregator_hosts):
+            original = application
+            employer_application = True
     if not _safe_public_url(original):
         job.availability_note = "No safe, valid posting URL."
         return job
@@ -122,8 +133,11 @@ def check_application(job, timeout: int = 8):
             job.availability_note = "Posting page explicitly reports an unavailable job."
         elif (_same_posting(original, resolved) and _title_in_heading(raw, job.title)
                 and APPLY.search(raw)):
-            job.availability = "Available"
-            job.availability_note = "Matching job title and application call-to-action found."
+            if job.source in {"remoteok", "jobicy", "himalayas", "wwr"} and not employer_application:
+                job.availability_note = "Aggregator page available; employer application unverified."
+            else:
+                job.availability = "Available"
+                job.availability_note = "Matching job title and application call-to-action found."
         else:
             job.availability_note = "Posting could not be confirmed; check manually."
     except urllib.error.HTTPError as exc:
@@ -140,7 +154,7 @@ def check_application(job, timeout: int = 8):
 def verify_shortlist(jobs, config: dict, log: list[str]):
     """Check the strongest matches in parallel without slowing every feed query."""
     max_checks = max(0, min(int(config.get("verification_max_per_scan", 40)), 100))
-    candidates = sorted(jobs, key=lambda job: (job.priority_score, job.fit_score), reverse=True)[:max_checks]
+    candidates = sorted(jobs, key=lambda job: (job.fresh, job.priority_score, job.fit_score), reverse=True)[:max_checks]
     with ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(check_application, candidates))
     retained, closed = [], []
