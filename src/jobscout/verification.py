@@ -27,6 +27,20 @@ def _norm(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
 
 
+def _title_in_heading(html_text: str, title: str) -> bool:
+    """Require job-specific title evidence, not a phrase in global navigation."""
+    wanted = _norm(title)
+    if not wanted:
+        return False
+    headings = re.findall(r"<(?:h1|h2|title)\\b[^>]*>(.*?)</(?:h1|h2|title)>",
+                          html_text, flags=re.I | re.S)
+    for heading in headings:
+        actual = _norm(strip_html(heading))
+        if actual == wanted or actual.startswith(wanted + " ") or actual.endswith(" " + wanted):
+            return True
+    return False
+
+
 def _safe_public_url(url: str) -> bool:
     try:
         uri = urllib.parse.urlsplit(url)
@@ -106,7 +120,7 @@ def check_application(job, timeout: int = 8):
         if CLOSED.search(text) and _same_posting(original, resolved):
             job.availability = "Closed"
             job.availability_note = "Posting page explicitly reports an unavailable job."
-        elif (_same_posting(original, resolved) and _norm(job.title) in _norm(text)
+        elif (_same_posting(original, resolved) and _title_in_heading(raw, job.title)
                 and APPLY.search(raw)):
             job.availability = "Available"
             job.availability_note = "Matching job title and application call-to-action found."
