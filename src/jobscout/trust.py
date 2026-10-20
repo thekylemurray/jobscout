@@ -51,3 +51,54 @@ def requisition_key(job: Job) -> str:
     if job.uid:
         return f"{company}:id:{job.uid.strip().lower()}"
     return f"{company}:unknown"
+
+
+def observe_requisition(job: Job, state: dict, checked_at: str | None = None) -> bool:
+    """Preserve the first observation and the strongest early posting date."""
+    when = checked_at or iso_now()
+    key = requisition_key(job)
+    rows = state.setdefault("requisitions", {})
+    prior = rows.get(key)
+    legacy = state.setdefault("jobs", {})
+    old_uid = legacy.get(job.uid)
+    is_new = prior is None and old_uid is None
+    rec = rows.setdefault(key, {})
+    previous_first = rec.get("first_seen_at") or (old_uid or {}).get("first_seen_at")
+    job.first_seen_at = previous_first or job.first_seen_at or when
+    rec["first_seen_at"] = job.first_seen_at
+    rec["last_seen_at"] = when
+    rec["last_title"] = job.title
+    rec["last_uid"] = job.uid
+    rec["observations"] = int(rec.get("observations", 0)) + 1
+    rec["alerted"] = bool(rec.get("alerted") or (old_uid or {}).get("alerted"))
+
+    newer_date = parse_dt(job.published_at)
+    earlier_date = parse_dt(rec.get("first_published_at"))
+    new_basis = publication_basis(job)
+    old_basis = rec.get("publication_basis", "unknown")
+    if newer_date and (not earlier_date or
+            CONFIDENCE.get(new_basis, 0) > CONFIDENCE.get(old_basis, 0) or
+            (new_basis == old_basis and newer_date < earlier_date)):
+        rec["first_published_at"] = job.published_at
+        rec["publication_basis"] = new_basis
+    if rec.get("first_published_at"):
+        job.published_at = rec["first_published_at"]
+        job.publication_basis = rec.get("publication_basis", "unknown")
+    else:
+        job.publication_basis = "first_seen"
+    job.history_key = key
+    legacy.setdefault(job.uid, {"first_seen_at": job.first_seen_at, "alerted": rec["alerted"]})
+    return is_new
+
+
+def remember_verification(job: Job, state: dict) -> None:
+    """A failure to verify is not proof that the employer has closed a job."""
+    if not job.availability_checked_at:
+        return
+    key = job.history_key or requisition_key(job)
+    rec = state.setdefault("requisitions", {}).setdefault(key, {})
+    rec["last_checked_at"] = job.availability_checked_at
+    rec["last_status"] = job.availability
+    rec["last_status_note"] = job.availability_note
+    if job.availability == "Closed":
+        rec.setdefault("first_closed_at", job.availability_checked_at)
