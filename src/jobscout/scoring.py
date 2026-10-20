@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from .models import Job
+from .trust import publication_basis
 from .rules import (
     ADJACENT_OWNERSHIP_SIGNALS, AGGREGATOR_SOURCES, CORE_GROUPS, DIRECT_SOURCES,
     FOREIGN_MARKERS, HARD_VETO_TITLE_TERMS, HEAVY_ADJACENT_TERMS, REMOTE_US_MARKERS,
@@ -266,12 +267,13 @@ def apply_freshness(job: Job, config: dict[str, Any], *, board_initialized: bool
     pub = parse_dt(job.published_at)
     first = parse_dt(job.first_seen_at)
 
+    job.publication_basis = publication_basis(job)
     if pub:
         job.discovery_status = "published"
         age = max(0.0, (now_utc() - pub).total_seconds() / 3600)
     elif board_initialized:
-        job.discovery_status = "new" if is_new else "new"
-        age = max(0.0, (now_utc() - first).total_seconds() / 3600) if first else None
+        job.discovery_status = "new" if is_new else "seen_before"
+        age = None  # Discovery date is not evidence of posting date.
     else:
         job.discovery_status = "baseline"
         age = None
@@ -349,12 +351,16 @@ def apply_freshness(job: Job, config: dict[str, Any], *, board_initialized: bool
 
     job.priority_score = max(0, min(100, round(priority)))
     job.priority_reasons = why[:8]
-    job.fresh = bool(age is not None and age <= config.get("max_alert_age_hours", 24))
+    job.fresh = bool(age is not None and age <= config.get("max_alert_age_hours", 24) and job.publication_basis == "employer_timestamp")
     return job
 
 def freshness_label(job: Job) -> str:
     if job.discovery_status == "baseline":
         return "BASELINE"
+    if job.publication_basis in ("first_seen", "unknown"):
+        return "DATE UNKNOWN"
+    if job.publication_basis == "relative_estimate":
+        return "ESTIMATED AGE"
     age = job.age_hours
     if age is None:
         return "NEWLY SEEN"
@@ -397,9 +403,15 @@ def dedupe_jobs(jobs: list[Job], config: dict[str, Any]) -> list[Job]:
             sources = sorted({j.source for j in cluster if j.source != best.source})
             best.also_found_on = sources
             # Preserve the earliest trustworthy publication timestamp found anywhere.
-            pubs = [(parse_dt(j.published_at), j.published_at) for j in cluster if parse_dt(j.published_at)]
+            pubs = [(j, parse_dt(j.published_at)) for j in cluster if parse_dt(j.published_at)]
             if pubs and not best.published_at:
-                best.published_at = min(pubs, key=lambda x: x[0])[1]
+                # Don't present an aggregator or relative estimate as an ATS timestamp.
+                origin, _ = sorted(pubs, key=lambda pair: (
+                    {"employer_timestamp": 0, "feed_timestamp": 1, "relative_estimate": 2}.get(publication_basis(pair[0]), 3),
+                    pair[1],
+                ))[0]
+                best.published_at = origin.published_at
+                best.publication_basis = publication_basis(origin)
                 apply_freshness(best, config, board_initialized=True, is_new=False)
             out.append(best)
     return out
