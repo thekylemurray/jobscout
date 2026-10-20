@@ -1,0 +1,39 @@
+JOBSCOUT — START HERE
+
+1. Extract the entire ZIP to a folder on your Windows computer.
+2. Open JobScout.exe. Python and a terminal are not needed.
+3. Choose Import profile and select the JSON profile supplied separately.
+   Import once; JobScout remembers your saved profile next time.
+4. Review Search preferences and Job sources, then Save.
+5. Choose Search configured sources. Keep the window open until it finishes.
+   A broad search can take several minutes; progress appears at the bottom.
+6. Choose Open results. A high score is not proof you meet every requirement.
+
+RESULTS
+Worth reviewing: no automated verification notes remain. Still read the posting.
+Needs verification: pay, location, qualifications, availability or another detail
+needs checking. Read the notes before applying.
+Excluded: see Scan report / exclusions for the filtering reason and salary evidence.
+Availability reflects the time of the check; a job can close afterward.
+Unverified means the check could not confirm availability, not that the job closed.
+
+SALARY REVIEW
+Open Salary review, select a posting, and choose Automatic, Ignore annual-period
+inference, or Use confirmed annual USD base range. Enter confirmed minimum/maximum
+when applicable, then Save salary decision. Search again to refresh results.
+Corrections affect only that posting URL. Other criteria still apply.
+The checkbox can disable annual-period inference for the entire profile.
+
+UPDATES AND TROUBLESHOOTING
+Replace the executable when updating; saved profiles are kept separately.
+Open saved profile restores an existing profile without creating a new copy.
+Open results folder contains eligible_all.csv, rejected.csv, last_run.log and
+review-jobs.json. The last file includes full posting descriptions and your local
+review decisions in the generated results; share files only as you intend.
+A failed source is reported in Scan report / exclusions. Retry later.
+The last successful source search time remains visible after a failed search.
+
+JobScout searches configured sources, not every job site. It never applies for
+jobs or sends your resume. Open application takes you to the employer website.
+The app may be unsigned; verify that your download came from the supplied project
+build page. Do not bypass your employer's computer security policies.

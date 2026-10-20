@@ -60,6 +60,9 @@ def core_group_hits_by_section(description: str) -> list[tuple[int, str, list[st
     return out
 
 def region_status(job: Job, config: dict[str, Any]) -> tuple[bool, str]:
+    if config.get("profile"):
+        from .profiles import profile_location
+        return profile_location(job, config)
     loc = as_text(job.location).lower().strip()
     workplace = as_text(job.workplace).lower().strip()
     combined = f"{loc} {workplace}".strip()
@@ -147,6 +150,9 @@ def adjacent_specialization_strength(title: str, description: str, term: str) ->
     return "supporting"
 
 def score_job(job: Job, config: dict[str, Any]) -> Job:
+    if config.get("profile"):
+        from .profiles import score_profile
+        return score_profile(job, config)
     title = as_text(job.title)
     description = as_text(job.description)
     text = f"{title}\n{description}"
@@ -268,12 +274,16 @@ def apply_freshness(job: Job, config: dict[str, Any], *, board_initialized: bool
 
     if pub:
         job.discovery_status = "published"
+        if not job.publication_basis:
+            job.publication_basis = "feed_timestamp" if job.source in AGGREGATOR_SOURCES else "employer_timestamp"
         age = max(0.0, (now_utc() - pub).total_seconds() / 3600)
     elif board_initialized:
-        job.discovery_status = "new" if is_new else "new"
+        job.discovery_status = "new" if is_new else "seen_before"
+        job.publication_basis = "first_seen"
         age = max(0.0, (now_utc() - first).total_seconds() / 3600) if first else None
     else:
         job.discovery_status = "baseline"
+        job.publication_basis = "unknown"
         age = None
 
     job.age_hours = age
@@ -330,7 +340,11 @@ def apply_freshness(job: Job, config: dict[str, Any], *, board_initialized: bool
             priority += 2
             why.append("remote +2")
 
-    lo, hi = parse_compensation_bounds(job.compensation)
+    if config.get("profile"):
+        from .profiles import annual_usd
+        lo, hi = annual_usd(as_text(job.compensation)) or (None, None)
+    else:
+        lo, hi = parse_compensation_bounds(job.compensation)
     floor = float(config.get("salary_floor", 75000))
     target = float(config.get("salary_target", 100000))
     if hi is not None and hi < floor:
@@ -349,12 +363,14 @@ def apply_freshness(job: Job, config: dict[str, Any], *, board_initialized: bool
 
     job.priority_score = max(0, min(100, round(priority)))
     job.priority_reasons = why[:8]
-    job.fresh = bool(age is not None and age <= config.get("max_alert_age_hours", 24))
+    job.fresh = bool(age is not None and age <= config.get("max_alert_age_hours", 24) and job.publication_basis in {"employer_timestamp", "feed_timestamp"})
     return job
 
 def freshness_label(job: Job) -> str:
     if job.discovery_status == "baseline":
         return "BASELINE"
+    if job.publication_basis in {"relative_estimate", "first_seen", "unknown"}:
+        return "DATE UNVERIFIED"
     age = job.age_hours
     if age is None:
         return "NEWLY SEEN"

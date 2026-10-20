@@ -1,0 +1,73 @@
+# JobScout for Windows
+
+This preview adds a native window and separate search profiles to JobScout. Each person can use the same executable with their own preferences. No terminal or Python installation is needed on the recipient's computer.
+
+## Getting started
+
+1. Download the `JobScout-Windows` artifact from a successful **Windows desktop** run in GitHub Actions. Extract the ZIP.
+2. Open `JobScout.exe`.
+3. Choose **Import profile** and select the supplied JSON file. This copies preferences into a separate local profile; there is no code to edit. Alternatively, fill out the Search preferences form and Save.
+4. Review **Job sources**. Only the configured, enabled feeds are searched. Add or remove sources using the form. Workday needs the employer's full careers board URL; Greenhouse and Lever use a board token.
+5. Select **Search configured sources**. Large boards can take several minutes. Keep the app open until it finishes.
+6. Review source health, then **Open results**. Check **Scan report / exclusions** for coverage and filtering details. No matches from failed feeds does not mean those employers have no vacancies.
+7. Use **Check a posting** to paste a job found on LinkedIn, a company website, or elsewhere. Enter the location and work arrangement as advertised. The result opens in your browser.
+
+Use **Open saved profile** to reopen a profile on a later visit. Profiles are stored in `%LOCALAPPDATA%\JobScout\profiles`, each with its own search history and reports. **New profile** starts a separate search. Importing an existing profile again creates another copy. Save before switching profiles. Personal profiles and résumés are not bundled into the executable or public repository.
+
+## What the preview can and cannot establish
+
+- The portable matcher uses target title phrases and skill terms with explicit explanations. Scores are heuristic review aids, not calibrated percentages or hiring probabilities. Title phrases match in their written order: include alternate formulations where needed.
+- Local cities and explicit remote metadata control eligibility. Hybrid roles outside the configured cities are excluded. Remote roles require a human check of country/state restrictions and required office visits. Ambiguous location metadata may miss eligible roles; use manual review.
+- An explicit annual USD salary range wholly below the minimum is excluded. Missing currency, missing pay period, bonuses, stock, and other ambiguous compensation remain unverified. Salary is not always available in feed metadata. Paste it in manual review when needed.
+- Qualification terms are flagged for review. The app does not reliably distinguish a mandatory doctorate from a preferred doctorate or an equivalent experience alternative. It does not certify degree eligibility, health insurance, industry, or work-life balance.
+- Employer preferences are displayed as evidence, not automatic eligibility. Industry terms missing from a description trigger a review note.
+- Source coverage is limited to configured feeds; this is not a full LinkedIn/Indeed search. It does not log in or submit applications.
+- Keyword rules can miss relevant jobs or retain irrelevant ones. Review the posting itself, plus rejection audits and source logs.
+
+## Building and testing
+
+The Windows desktop workflow builds on Windows because PyInstaller packages are OS-specific. It runs the regression suite, exercises the native form, packages a windowed executable, and checks that the executable opens a window. Artifacts contain the executable and this guide only. They expire after 30 days; this is a preview distribution, not an auto-updating installer.
+
+Developers can run `python -m jobscout.desktop`. The GUI needs Tk, included with standard Windows Python distributions. CI uses Python 3.12 and a pinned PyInstaller build dependency. The app has no additional runtime Python dependencies.
+
+The executable is not code-signed. Windows may display an unknown-publisher warning. Distribute only an artifact from the expected repository and successful build; do not ask recipients to disable security software.
+
+Reference: https://pyinstaller.org/en/stable/operating-mode.html
+
+## Version 1.1 search improvements
+
+- Searches up to three employer boards concurrently and displays listing progress.
+- Workday sources may specify `search_text` to narrow retrieval at the employer endpoint. The scan report records that query, listing counts, title candidates, and detail failures. Query-limited retrieval is not exhaustive employer coverage.
+- **Scan report / exclusions** opens a readable report even if no jobs match, showing locations, work arrangements, and rejection reasons.
+- Head-of-function titles can be reviewed as possible Director equivalents; the app flags the scope for confirmation. Punctuation between title words no longer causes a missed match.
+- Qualification flags include a short excerpt so required specialties or degrees are easier to inspect.
+- Personal profile updates are supplied separately. Import the new profile file; replacing the executable alone does not change saved sources or preferences.
+
+## Version 1.2 qualification review
+
+- Optional **Exclude explicit doctorate requirements** blocks clearly mandatory doctoral qualifications. Preferred degrees, equivalent-experience language, and bachelor/master/nursing alternatives remain for review. This is conservative text matching, not a complete qualification assessment.
+- Portable profiles normalize escaped HTML before salary and qualification checks.
+- Preference checkboxes now sit below all salary fields.
+- Broad employer coverage can take considerably longer to scan. Each report records the actual sources, queries, counts, failures and exclusions; it does not certify a complete market search.
+
+Workday profiles may use `search_texts` for several queries per board. Results are combined by posting ID before scoring. For a Director-level search, `director` and `head` avoid requiring the word `clinical` in the source query; the career-title filter still applies. Each query has separate coverage diagnostics.
+
+### Version 1.3 scoring corrections
+
+Portable profiles recognize a small, auditable set of equivalent skill phrases (for example budgets/budgeting, CRO/vendor management, global clinical trials, and numeric/Roman clinical phases). Each configured category earns six points once; matching several aliases does not increase its weight. The base 50 and cap of 96 are unchanged. Match explanations include the wording found. Unconfigured categories never earn points, and arbitrary custom skills retain exact matching.
+
+Known Maryland city/state references no longer trigger MD degree review warnings. Mandatory qualification and location rules remain in effect.
+
+A labeled USD `Pay Range` in a full-time posting can now be treated as annual when the period is unstated and both bounds exceed $10,000. The inferred period is explicitly recorded in compensation, risks and any below-floor rejection. Hourly/monthly/weekly, total-pay, bonus, non-USD, and non-full-time cases are not inferred. This is a narrow heuristic and should be checked in the rejection report if pay terms are ambiguous.
+
+Fit measures recognized experience signals, not a probability or percentage of qualification. Priority additionally considers freshness. These corrections may raise or lower scores; they do not establish that a candidate meets every requirement. Existing profiles work without reimporting.
+
+### Version 1.4 handoff and verification
+
+- Portable dashboards use Worth reviewing / Needs verification rather than score-based Apply now tiers. Any review note or unverified availability keeps a posting in Needs verification, regardless of score. Excluded postings remain in the scan report, with salary assumptions visible.
+- Candidate availability is checked with a fresh request before display. Workday uses its public detail endpoint; other sources require a matching title and application text on the posting page. Explicit closed-page text and HTTP 404/410 exclude the posting. Timeouts, HTTP 403/429/5xx, generic redirects and JavaScript-only pages remain Unverified. Availability can change after checking; this is not a guarantee of hiring activity.
+- Salary review permits exact-URL corrections: automatic, ignore an inferred period, or a user-confirmed annual USD base range. A profile-wide checkbox can disable inference. Save then search again; location and qualification exclusions still apply. Corrections are local to the profile and do not change the employer posting.
+- The desktop remembers its saved profile, shows version and last successful source-search time, and includes a Start here tab plus Open results folder. Long forms scroll at smaller window sizes. A failed/partial source search does not update the last-successful timestamp.
+- `review-jobs.json` stores the last run's scored postings locally so Salary review can list its decisions. CSV exports include availability and review status; exclusions include compensation. No personal profile or resume is bundled into the build.
+
+Windows validation covers a fresh temporary profile, an offline synthetic scan, salary decisions, restoring the saved profile after restart, scrolling at minimum window size, opening the results folder, and launching the packaged executable. See START_HERE.txt in the download for recipient instructions.

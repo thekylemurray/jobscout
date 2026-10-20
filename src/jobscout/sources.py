@@ -283,7 +283,7 @@ def _workday_posted_iso(text: str | None) -> str | None:
         return (now - timedelta(hours=int(m.group(1)))).isoformat()
     return None
 
-def workday_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any] | None = None) -> list[Job]:
+def workday_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any] | None = None, *, title_terms: list[str] | None = None, search_text: str = "", progress=None, seniority_terms: list[str] | None = None) -> list[Job]:
     """Workday public CXS feed.
 
     The list endpoint is paged at exactly 20 records. To keep the 15-minute watch
@@ -297,11 +297,13 @@ def workday_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any
     page_size = 20
     out: list[Job] = []
     total: int | None = None
+    detail_failures = 0
+    detail_skipped = 0
 
     while True:
         data = request_json_post(
             endpoint,
-            {"appliedFacets": {}, "limit": page_size, "offset": offset, "searchText": ""},
+            {"appliedFacets": {}, "limit": page_size, "offset": offset, "searchText": search_text},
             referer=referer,
         )
         if total is None:
@@ -317,7 +319,8 @@ def workday_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any
             title = j.get("title", "") or ""
             # Full detail pages are the expensive call. The title filter is intentionally
             # broad and includes all marketing/content/web/search/digital/experience titles.
-            if not title_might_be_relevant(title):
+            from .profiles import title_matches
+            if not (title_matches(title, title_terms) if title_terms is not None else title_might_be_relevant(title)):
                 continue
 
             ext = j.get("externalPath") or ""
@@ -327,7 +330,12 @@ def workday_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any
             public_url = f"{origin}/{locale}/{site}{ext}"
             cached = cache.get(detail_url) or {}
 
-            if cached.get("description"):
+            from .profiles import seniority_matches
+            if seniority_terms and not seniority_matches(title, seniority_terms):
+                detail_skipped += 1
+                info = {"location": j.get("locationsText") or "", "description": "",
+                        "additional_locations": "", "employment_type": "", "remote_type": ""}
+            elif cached.get("description") and cached.get("cache_version") == 2:
                 info = cached
             else:
                 try:
@@ -349,6 +357,7 @@ def workday_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any
                     else:
                         add_locs_text = str(add_locs)
                     info = {
+                        "cache_version": 2,
                         "description": desc,
                         "location": ji.get("location") or j.get("locationsText") or "",
                         "additional_locations": add_locs_text,
@@ -358,6 +367,7 @@ def workday_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any
                     }
                     cache[detail_url] = info
                 except Exception:
+                    detail_failures += 1
                     info = {
                         "description": "",
                         "location": j.get("locationsText") or "",
@@ -372,11 +382,10 @@ def workday_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any
                 if x
             )
             remote_type = info.get("remote_type", "") or ""
-            workplace = "Remote" if (
+            workplace = "Hybrid" if has_term(remote_type, "hybrid") else "Remote" if (
                 has_term(remote_type, "remote")
                 or has_term(location, "remote")
-                or has_term(info.get("description", ""), "remote")
-            ) else ""
+            ) else remote_type
 
             jid = info.get("req_id") or ext.rsplit("_", 1)[-1] or ext
             out.append(Job(
@@ -391,11 +400,14 @@ def workday_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any
                 job_url=public_url,
                 apply_url=public_url,
                 published_at=_workday_posted_iso(j.get("postedOn")),
+                publication_basis="relative_estimate" if _workday_posted_iso(j.get("postedOn")) else "unknown",
                 first_seen_at=first_seen,
                 compensation="",
             ))
 
         offset += len(rows)
+        if progress:
+            progress(f"{company}: inspected {offset}/{total or '?'} listings; {len(out)} title candidates")
         if len(rows) < page_size:
             break
         if total and offset >= total:
@@ -403,6 +415,10 @@ def workday_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any
         if offset >= 5000:  # defensive ceiling for huge tenants
             break
 
+    if progress:
+        progress(f"COVERAGE {company}: query={search_text or 'all'}; inspected={offset}; reported={total}; candidates={len(out)}; detail_failures={detail_failures}; detail_skipped_seniority={detail_skipped}")
+        if total and offset < total:
+            progress(f"WARNING {company}: incomplete listing coverage ({offset}/{total})")
     return out
 
 def icims_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any] | None = None) -> list[Job]:

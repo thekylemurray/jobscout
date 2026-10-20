@@ -34,6 +34,10 @@ The result is a small information-retrieval system with four distinct concerns:
 - **Local-first:** no database or cloud account required.
 - **Zero runtime dependencies:** Python standard library only.
 
+## Windows desktop preview
+
+A native Windows interface now supports portable search profiles, editable preferences and sources, and manual posting review. The legacy web/content CLI profile remains available. See [Windows setup and limitations](docs/DESKTOP.md). Downloadable executables are produced by the Windows desktop workflow; personal profiles are imported locally.
+
 ## Quick start
 
 ```bash
@@ -173,7 +177,7 @@ CI runs the regression suite on Python 3.11, 3.12, and 3.13. Ruff is included as
 ## Roadmap
 
 - Feedback states (`apply`, `pass`, `applied`, `interview`) and preference learning.
-- Pluggable career profiles instead of one bundled web/content/search profile.
+- Richer profile-specific scoring and source coverage beyond the initial portable profile matcher.
 - Optional semantic reranking after deterministic filtering.
 - Source-specific health telemetry and fixture-backed adapter tests.
 - Salary normalization across hourly, monthly, and annual ranges.

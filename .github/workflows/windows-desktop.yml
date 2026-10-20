@@ -1,0 +1,48 @@
+name: Windows desktop
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'desktop/**']
+  pull_request:
+    paths: ['src/**', 'tests/**', 'packaging/**', '.github/workflows/windows-desktop.yml']
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -e ".[dev]" pyinstaller==6.22.3
+      - run: python -m pytest
+      - name: Build windowed executable
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name JobScout packaging/desktop_entry.py
+      - name: Smoke test native window
+        run: python packaging/smoke_desktop.py
+      - name: Check executable launches
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path dist/JobScout.exe).Path
+          $app = Start-Process $exe -PassThru
+          # One-file PyInstaller starts a child process that owns the Tk window.
+          # Inspect the matching executable's windows, not just the bootloader PID.
+          $window = $null
+          for ($attempt = 0; $attempt -lt 15; $attempt++) {
+            Start-Sleep -Seconds 2
+            $window = Get-Process JobScout -ErrorAction SilentlyContinue | Where-Object {
+              $_.Path -eq $exe -and $_.MainWindowHandle -ne 0 -and $_.MainWindowTitle -like 'JobScout*'
+            }
+            if ($window) { break }
+          }
+          Get-Process JobScout -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exe } | Stop-Process
+          if (-not $window) { throw "No JobScout desktop window found" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JobScout-Windows
+          path: |
+            dist/JobScout.exe
+            docs/DESKTOP.md
+            docs/START_HERE.txt
+          retention-days: 30

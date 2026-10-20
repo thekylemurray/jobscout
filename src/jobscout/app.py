@@ -7,51 +7,71 @@ import time
 import urllib.error
 import webbrowser
 from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict
 from datetime import datetime
 from typing import Any
 
 from . import __version__
 from .models import Job
+from .review import review_status, verify_candidates
+from .trust import reconcile_requisition, record_verification
 from .paths import RuntimePaths
 from .scoring import application_tier, apply_freshness, dedupe_jobs, freshness_label, score_job
 from .sources import SOURCE_FUNCS
-from .utils import as_text, has_any, iso_now, load_json, now_utc, save_json
+from .utils import as_text, has_any, iso_now, load_json, now_utc, parse_dt, save_json
 
-def fetch_all(config: dict[str, Any], state: dict[str, Any], cache: dict[str, Any], log: list[str]) -> tuple[list[Job], list[Job]]:
+def fetch_all(config: dict[str, Any], state: dict[str, Any], cache: dict[str, Any], log: list[str], progress=None) -> tuple[list[Job], list[Job]]:
     jobs: list[Job] = []
     rejected: list[Job] = []
     seen = state.setdefault("jobs", {})
     board_state = state.setdefault("boards", {})
 
-    for b in config.get("boards", []):
-        if not b.get("enabled", True):
-            continue
-        company, source, board = b["company"], b["source"], b["board"]
-        board_key = f"{source}:{board}"
-        initialized = bool((board_state.get(board_key) or {}).get("initialized"))
-        stamp = iso_now()
-        try:
-            func = SOURCE_FUNCS.get(source)
-            if not func:
-                log.append(f"SKIP unknown source: {source} / {company}")
-                continue
-            raw = func(company, board, stamp, cache)
-            log.append(f"OK {company} ({source}): {len(raw)} jobs")
-        except urllib.error.HTTPError as e:
-            log.append(f"FAIL {company} ({source}): HTTP {e.code}")
-            continue
-        except Exception as e:
-            log.append(f"FAIL {company} ({source}): {type(e).__name__}: {e}")
-            continue
+    boards = [b for b in config.get("boards", []) if b.get("enabled", True)]
 
-        for job in raw:
-            prev = seen.get(job.uid)
-            is_new = prev is None
-            if prev and prev.get("first_seen_at"):
-                job.first_seen_at = prev["first_seen_at"]
+    def fetch_board(b):
+        company, source, board = b["company"], b["source"], b["board"]
+        messages = []
+        if progress:
+            progress(f"Searching {company} ({source})…")
+        def source_progress(message):
+            if message.startswith(("COVERAGE ", "WARNING ")):
+                messages.append(message)
+            if progress:
+                progress(message)
+        try:
+            func = SOURCE_FUNCS[source]
+            if source == "workday" and config.get("profile"):
+                queries = b.get("search_texts") or [b.get("search_text", "")]
+                by_uid = {}
+                for query in queries:
+                    for job in func(company, board, iso_now(), cache,
+                                    title_terms=config["profile"]["title_terms"],
+                                    search_text=query, progress=source_progress,
+                                    seniority_terms=config["profile"]["seniority_terms"]):
+                        by_uid[job.uid] = job
+                raw = list(by_uid.values())
             else:
-                seen[job.uid] = {"first_seen_at": job.first_seen_at, "alerted": False}
+                raw = func(company, board, iso_now(), cache)
+            messages.append(f"OK {company} ({source}): {len(raw)} jobs")
+            return b, raw, messages, True
+        except Exception as exc:
+            messages.append(f"FAIL {company} ({source}): {type(exc).__name__}: {exc}")
+            return b, [], messages, False
+
+    # Network retrieval is bounded to three employer boards; scoring and state
+    # updates remain sequential. Each board's cache entries use distinct URLs.
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        futures = [pool.submit(fetch_board, b) for b in boards]
+        fetched = [future.result() for future in as_completed(futures)]
+    for b, raw, messages, ok in fetched:
+        log.extend(messages)
+        if not ok:
+            continue
+        board_key = f"{b['source']}:{b['board']}"
+        initialized = bool((board_state.get(board_key) or {}).get("initialized"))
+        for job in raw:
+            is_new = reconcile_requisition(job, state)
 
             job = score_job(job, config)
             job = apply_freshness(job, config, board_initialized=initialized, is_new=is_new)
@@ -88,8 +108,8 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
     with paths.eligible_csv.open("w", newline="", encoding="utf-8") as f:
         fields = [
             "priority_score", "fit_score", "company", "title", "location", "workplace",
-            "employment_type", "freshness", "age_hours", "published_at", "updated_at",
-            "compensation", "role_lane", "lane_confidence", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on"
+            "employment_type", "freshness", "age_hours", "published_at", "publication_basis", "updated_at",
+            "review_status", "availability", "availability_note", "availability_checked_at", "compensation", "role_lane", "lane_confidence", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on"
         ]
         w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
@@ -105,7 +125,12 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "freshness": freshness_label(j),
                 "age_hours": "" if j.age_hours is None else round(j.age_hours, 1),
                 "published_at": j.published_at or "",
+                "publication_basis": j.publication_basis,
                 "updated_at": j.updated_at or "",
+                "review_status": review_status(j),
+                "availability": j.availability,
+                "availability_note": j.availability_note,
+                "availability_checked_at": j.availability_checked_at,
                 "compensation": j.compensation,
                 "role_lane": j.role_lane,
                 "lane_confidence": j.lane_confidence,
@@ -119,8 +144,8 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
     with paths.jobs_csv.open("w", newline="", encoding="utf-8") as f:
         fields = [
             "priority_score", "fit_score", "company", "title", "location", "workplace",
-            "employment_type", "freshness", "age_hours", "published_at", "updated_at",
-            "compensation", "role_lane", "lane_confidence", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on"
+            "employment_type", "freshness", "age_hours", "published_at", "publication_basis", "updated_at",
+            "review_status", "availability", "availability_note", "availability_checked_at", "compensation", "role_lane", "lane_confidence", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on"
         ]
         w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
@@ -136,7 +161,12 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "freshness": freshness_label(j),
                 "age_hours": "" if j.age_hours is None else round(j.age_hours, 1),
                 "published_at": j.published_at or "",
+                "publication_basis": j.publication_basis,
                 "updated_at": j.updated_at or "",
+                "review_status": review_status(j),
+                "availability": j.availability,
+                "availability_note": j.availability_note,
+                "availability_checked_at": j.availability_checked_at,
                 "compensation": j.compensation,
                 "role_lane": j.role_lane,
                 "lane_confidence": j.lane_confidence,
@@ -153,12 +183,14 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
         "web", "website", "content", "seo", "aeo", "geo", "search", "digital",
         "communications", "editorial", "brand", "campaign", "cms", "experience"
     ]
+    if config.get("profile"):
+        near_terms = config["profile"]["title_terms"]
     near_misses = [
         j for j in rejected
         if has_any(j.title or "", near_terms)
     ]
     with paths.near_miss_csv.open("w", newline="", encoding="utf-8") as f:
-        fields = ["company", "title", "location", "source", "veto_reason", "apply_url"]
+        fields = ["company", "title", "location", "source", "veto_reason", "compensation", "availability", "apply_url"]
         w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
         for j in near_misses:
@@ -168,11 +200,13 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "location": j.location,
                 "source": j.source,
                 "veto_reason": j.veto_reason,
+                "compensation": j.compensation,
+                "availability": j.availability,
                 "apply_url": j.apply_url,
             })
 
     with paths.rejected_csv.open("w", newline="", encoding="utf-8") as f:
-        fields = ["company", "title", "location", "source", "veto_reason", "apply_url"]
+        fields = ["company", "title", "location", "source", "veto_reason", "compensation", "availability", "apply_url"]
         w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
         for j in rejected:
@@ -182,6 +216,8 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "location": j.location,
                 "source": j.source,
                 "veto_reason": j.veto_reason,
+                "compensation": j.compensation,
+                "availability": j.availability,
                 "apply_url": j.apply_url,
             })
 
@@ -193,21 +229,32 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
         rec = seen.setdefault(j.uid, {"first_seen_at": j.first_seen_at, "alerted": False})
         if j.discovery_status == "baseline":
             continue
-        is_new_enough = j.age_hours is not None and j.age_hours <= max_age
-        if j.priority_score >= alert_threshold and is_new_enough and not rec.get("alerted", False):
+        hist = state.setdefault("requisitions", {}).get(j.history_key or "", {})
+        # A newly updated feed does not establish that an old role is newly published.
+        first = parse_dt(j.first_seen_at)
+        first_age = (now_utc() - first).total_seconds() / 3600 if first else None
+        is_new_enough = j.fresh and first_age is not None and 0 <= first_age <= max_age
+        verified = j.availability == "Available" if config.get("profile") else True
+        if (j.priority_score >= alert_threshold and is_new_enough and verified
+                and not rec.get("alerted", False) and not hist.get("alerted", False)):
             alerts.append(j)
             rec["alerted"] = True
             rec["alerted_at"] = iso_now()
+            if hist is not None:
+                hist["alerted"] = True
+                hist["alerted_at"] = rec["alerted_at"]
 
     save_json(paths.alerts, [asdict(j) for j in alerts])
-    paths.dashboard.write_text(render_html(visible), encoding="utf-8")
+    paths.dashboard.write_text(render_html(visible, portable=bool(config.get('profile'))), encoding="utf-8")
     return alerts
 
-def render_html(jobs: list[Job]) -> str:
+def render_html(jobs: list[Job], *, portable: bool = False) -> str:
     tier_order = ["🔥 Apply now", "🟢 Strong matches", "🟡 Worth reviewing", "🔵 Discovery"]
+    if portable:
+        tier_order = ['Worth reviewing', 'Needs verification', 'Excluded']
     buckets: dict[str, list[Job]] = {t: [] for t in tier_order}
     for j in jobs:
-        buckets[application_tier(j)].append(j)
+        buckets[review_status(j) if portable else application_tier(j)].append(j)
 
     sections: list[str] = []
     for tier in tier_order:
@@ -221,17 +268,20 @@ def render_html(jobs: list[Job]) -> str:
             risks = "".join(f"<li>{html.escape(x)}</li>" for x in (j.risks or []))
             breakdown = "".join(f"<li>{html.escape(x)}</li>" for x in (j.score_breakdown or []))
             pri = "".join(f"<li>{html.escape(x)}</li>" for x in (j.priority_reasons or []))
-            risk_block = f"<div class='risks'><strong>Watch:</strong><ul>{risks}</ul></div>" if risks else ""
+            risk_block = f"<div class='risks'><strong>Check before applying:</strong><ul>{risks}</ul></div>" if risks else ""
             comp = f"<span>{html.escape(j.compensation)}</span>" if j.compensation else ""
             duplicate = f"<span>also: {html.escape(', '.join(j.also_found_on or []))}</span>" if j.also_found_on else ""
+            lane_label = f'{j.lane_confidence}% lane confidence' if j.lane_confidence else 'profile rules; review required'
+            fit_label = f'{j.fit_score}% fit' if j.lane_confidence else f'{j.fit_score}/100 fit score'
             cards.append(f"""
             <article class='card'>
-              <div class='scores'><div class='priority'>{j.priority_score}</div><small>priority</small><div class='fit'>{j.fit_score}% fit</div></div>
+              <div class='scores'><div class='priority'>{j.priority_score}</div><small>priority</small><div class='fit'>{fit_label}</div></div>
               <div class='body'>
                 <div class='topline'><span class='fresh'>{freshness_label(j)}</span><span class='age'>{age}</span><span class='source'>{html.escape(j.source)}</span></div>
+                <p><strong>{html.escape(review_status(j))}</strong> · Availability: {html.escape(j.availability)}<br><small>{html.escape(j.availability_note)} {html.escape(j.availability_checked_at)}</small></p>
                 <h2>{html.escape(j.title)}</h2>
                 <h3>{html.escape(j.company)}</h3>
-                <div class='lane'>{html.escape(j.role_lane)} <span>{j.lane_confidence}% lane confidence</span></div>
+                <div class='lane'>{html.escape(j.role_lane)} <span>{lane_label}</span></div>
                 <div class='meta'><span>{html.escape(j.location or 'Location not listed')}</span><span>{html.escape(j.workplace or '')}</span><span>{html.escape(as_text(j.employment_type) or '')}</span>{comp}{duplicate}</div>
                 <div class='grid'><div><strong>Why it matches</strong><ul>{reasons}</ul></div>{risk_block}</div>
                 <details><summary>Why these scores?</summary><div class='details-grid'><div><strong>Fit evidence</strong><ul>{breakdown}</ul></div><div><strong>Priority evidence</strong><ul>{pri}</ul></div></div></details>
@@ -251,17 +301,17 @@ def render_html(jobs: list[Job]) -> str:
 main{{max-width:1120px;margin:0 auto;padding:28px 18px 60px}}header{{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:8px}}h1{{font-size:34px;margin:0}}.subtitle{{color:var(--muted);margin-top:6px}}.stamp{{color:var(--muted);font-size:13px}}.summary{{color:#cbd5e1;font-size:13px;margin:8px 0 24px}}.section-head{{display:flex;justify-content:space-between;align-items:center;margin-top:28px;border-bottom:1px solid #263244;padding-bottom:7px}}.section-head h2{{font-size:20px;margin:0}}.section-head span{{color:var(--muted);font-size:13px}}
 .card{{display:grid;grid-template-columns:92px 1fr;background:rgba(17,24,39,.94);border:1px solid #263244;border-radius:16px;margin:14px 0;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.18)}}
 .scores{{padding:20px 14px;text-align:center;background:#0b1220;border-right:1px solid #263244}}.priority{{font-size:34px;font-weight:800;color:var(--cyan)}}.scores small{{color:var(--muted)}}.fit{{margin-top:12px;font-size:14px;color:#bbf7d0}}.body{{padding:19px 22px}}.topline{{display:flex;gap:10px;align-items:center;font-size:12px;text-transform:uppercase;letter-spacing:.06em}}.fresh{{font-weight:800;color:var(--green)}}.age,.source{{color:var(--muted)}}.body h2{{margin:8px 0 2px;font-size:23px}}h3{{margin:0 0 8px;color:#cbd5e1;font-weight:600}}.lane{{display:inline-block;background:#172033;border:1px solid #2b3b52;border-radius:999px;padding:5px 9px;font-size:12px;margin:2px 0 9px}}.lane span{{color:var(--muted);margin-left:6px}}.meta{{display:flex;flex-wrap:wrap;gap:7px 14px;color:var(--muted);font-size:14px}}.grid,.details-grid{{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}}ul{{margin:6px 0 0;padding-left:18px;color:#cbd5e1}}li{{margin:3px 0}}.risks strong{{color:var(--amber)}}details{{margin-top:13px;border-top:1px solid #263244;padding-top:10px}}summary{{cursor:pointer;color:#93c5fd;font-size:13px}}.apply{{display:inline-block;margin-top:16px;padding:9px 14px;background:#0e7490;color:white;border-radius:9px;text-decoration:none;font-weight:700}}.apply:hover{{background:#0891b2}}.empty{{padding:40px;background:var(--panel);border-radius:14px;color:var(--muted)}}@media(max-width:700px){{.card{{grid-template-columns:70px 1fr}}.grid,.details-grid{{grid-template-columns:1fr}}header{{display:block}}.stamp{{margin-top:8px}}}}
-</style></head><body><main><header><div><h1>JobScout <small style='font-size:14px;color:#94a3b8'>v{__version__}</small></h1><div class='subtitle'>Explainable job discovery for web, CMS, search, content systems, and knowledge-management roles.</div></div><div class='stamp'>Updated {stamp}</div></header><div class='summary'>{html.escape(counts)}</div>{''.join(sections)}</main></body></html>"""
+</style></head><body><main><header><div><h1>JobScout <small style='font-size:14px;color:#94a3b8'>v{__version__}</small></h1><div class='subtitle'>Explainable job discovery based on your search preferences.</div></div><div class='stamp'>Updated {stamp}</div></header><div class='summary'>{html.escape(counts)} · Scores are review aids, not probabilities. Needs verification means unresolved requirements remain. <a href='scan-report.html'>Excluded postings and scan coverage</a></div>{''.join(sections)}</main></body></html>"""
 
 def notify(alerts: list[Job], paths: RuntimePaths, open_dashboard: bool = True) -> None:
     if not alerts:
         return
     print("\n" + "=" * 72)
-    print(f"NEW STRONG MATCHES: {len(alerts)}")
+    print(f"NEW POSTINGS TO REVIEW: {len(alerts)}")
     print("=" * 72)
     for j in alerts:
         age = "?" if j.age_hours is None else f"{j.age_hours:.1f}h"
-        print(f"[{j.fit_score}% fit / {age}] {j.title} — {j.company}")
+        print(f"[{j.fit_score}/100 fit score / {age}] {j.title} — {j.company}")
         print(f"  {j.apply_url}")
     if os.name == "nt":
         try:
@@ -277,16 +327,28 @@ def notify(alerts: list[Job], paths: RuntimePaths, open_dashboard: bool = True) 
         except Exception:
             pass
 
-def run_once(paths: RuntimePaths, *, open_dashboard: bool = False, quiet: bool = False) -> int:
+def run_once(paths: RuntimePaths, *, open_dashboard: bool = False, quiet: bool = False, progress=None) -> int:
     paths.ensure()
     if not paths.config.exists():
         raise FileNotFoundError(f"Missing {paths.config}. Copy config.example.json to config.json first.")
     config = load_json(paths.config, {})
+    from .config import validate_config
+    errors = validate_config(config)
+    if errors:
+        raise ValueError("; ".join(errors))
     state = load_json(paths.state, {"version": __version__, "jobs": {}, "boards": {}})
     cache = load_json(paths.cache, {})
     state["version"] = __version__
     log: list[str] = [f"JobScout v{__version__} run {iso_now()}"]
-    jobs, rejected = fetch_all(config, state, cache, log)
+    jobs, rejected = fetch_all(config, state, cache, log, progress=progress)
+    if config.get('profile'):
+        jobs, rejected = verify_candidates(jobs, rejected, progress)
+    for job in jobs + rejected:
+        record_verification(job, state)
+    state['last_completed_scan'] = iso_now()
+    if any(line.startswith('OK ') for line in log) and not any(line.startswith('FAIL ') for line in log):
+        state['last_successful_scan'] = state['last_completed_scan']
+    save_json(paths.output_dir / 'review-jobs.json', [asdict(j) for j in jobs + rejected])
     alerts = write_outputs(jobs, rejected, config, state, paths)
     save_json(paths.state, state)
     save_json(paths.cache, cache)
@@ -303,6 +365,12 @@ def run_once(paths: RuntimePaths, *, open_dashboard: bool = False, quiet: bool =
     for reason, count in reason_counts.most_common(8):
         log.append(f"REJECT {count}: {reason}")
     paths.log.write_text("\n".join(log), encoding="utf-8")
+    rows = ''.join('<tr>' + ''.join('<td>' + html.escape(as_text(x)) + '</td>' for x in
+        (j.company, j.title, j.location, j.workplace, j.compensation, j.availability, j.veto_reason)) + '</tr>' for j in rejected)
+    audit = '<!doctype html><meta charset="utf-8"><title>JobScout scan report</title><style>body{font:16px system-ui;margin:32px}td,th{padding:12px;text-align:left;border-bottom:1px solid #ccc}pre{white-space:pre-wrap}</style><h1>Scan coverage and exclusions</h1>'
+    audit += '<p>These are filtering decisions, not a claim that no suitable jobs exist. Inspect source failures and incomplete coverage below.</p>'
+    audit += '<pre>' + html.escape('\n'.join(log)) + '</pre><table><tr><th>Employer</th><th>Title</th><th>Location</th><th>Arrangement</th><th>Salary / assumption</th><th>Availability</th><th>Exclusion reason</th></tr>' + rows + '</table>'
+    (paths.output_dir / 'scan-report.html').write_text(audit, encoding='utf-8')
     if not quiet:
         enabled = sum(1 for b in config.get("boards", []) if b.get("enabled", True))
         print(f"Scanned {enabled} configured sources.")
