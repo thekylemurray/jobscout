@@ -274,12 +274,16 @@ def apply_freshness(job: Job, config: dict[str, Any], *, board_initialized: bool
 
     if pub:
         job.discovery_status = "published"
+        if not job.publication_basis:
+            job.publication_basis = "feed_timestamp" if job.source in AGGREGATOR_SOURCES else "employer_timestamp"
         age = max(0.0, (now_utc() - pub).total_seconds() / 3600)
     elif board_initialized:
-        job.discovery_status = "new" if is_new else "new"
+        job.discovery_status = "new" if is_new else "seen_before"
+        job.publication_basis = "first_seen"
         age = max(0.0, (now_utc() - first).total_seconds() / 3600) if first else None
     else:
         job.discovery_status = "baseline"
+        job.publication_basis = "unknown"
         age = None
 
     job.age_hours = age
@@ -359,12 +363,14 @@ def apply_freshness(job: Job, config: dict[str, Any], *, board_initialized: bool
 
     job.priority_score = max(0, min(100, round(priority)))
     job.priority_reasons = why[:8]
-    job.fresh = bool(age is not None and age <= config.get("max_alert_age_hours", 24))
+    job.fresh = bool(age is not None and age <= config.get("max_alert_age_hours", 24) and job.publication_basis in {"employer_timestamp", "feed_timestamp"})
     return job
 
 def freshness_label(job: Job) -> str:
     if job.discovery_status == "baseline":
         return "BASELINE"
+    if job.publication_basis in {"relative_estimate", "first_seen", "unknown"}:
+        return "DATE UNVERIFIED"
     age = job.age_hours
     if age is None:
         return "NEWLY SEEN"

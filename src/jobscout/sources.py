@@ -400,6 +400,7 @@ def workday_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any
                 job_url=public_url,
                 apply_url=public_url,
                 published_at=_workday_posted_iso(j.get("postedOn")),
+                publication_basis="relative_estimate" if _workday_posted_iso(j.get("postedOn")) else "unknown",
                 first_seen_at=first_seen,
                 compensation="",
             ))
