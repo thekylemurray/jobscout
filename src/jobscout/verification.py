@@ -32,7 +32,7 @@ def _title_in_heading(html_text: str, title: str) -> bool:
     wanted = _norm(title)
     if not wanted:
         return False
-    headings = re.findall(r"<(?:h1|h2|title)\\b[^>]*>(.*?)</(?:h1|h2|title)>",
+    headings = re.findall(r"<(?:h1|h2|title)\b[^>]*>(.*?)</(?:h1|h2|title)>",
                           html_text, flags=re.I | re.S)
     for heading in headings:
         actual = _norm(strip_html(heading))
