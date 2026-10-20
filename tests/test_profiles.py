@@ -189,3 +189,9 @@ def test_workday_multiple_queries_deduplicate_before_scoring(monkeypatch, profil
 def test_mandatory_medical_credentials_are_not_experience_alternatives(profile_config, description):
     profile_config['profile']['exclude_required_doctorate'] = True
     assert not score_job(job(description=description), profile_config).eligible
+
+
+def test_required_doctorate_before_unrelated_preferred_skill(profile_config):
+    profile_config['profile']['exclude_required_doctorate'] = True
+    text = 'Requirements: Doctoral level degree (PhD, MD, PharmD, PsyD) required 8+ years of clinical development experience Experience in CNS strongly preferred'
+    assert not score_job(job(description=text), profile_config).eligible

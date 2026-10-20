@@ -45,14 +45,19 @@ def required_doctorate(description: str) -> str:
     text = re.sub(r"\bM\.D\.", "MD", text, flags=re.I)
     degree = r"(?:doctoral(?:[- ]level)?(?: degree)?|doctorate|PhD|MD|DO degree|medical degree|PharmD|PsyD)"
     for clause in re.split(r"[.!?;]\s+|\n|(?=Preferred (?:Qualifications|Skills))", text, flags=re.I):
-        if re.search(r"preferred|desirable|not required|equivalent experience|bachelor|master|\bMPH\b|\bBS\b|\bBA\b|\bMS\b|\bRN\b", clause, re.I):
+        match = re.search(degree + r"[^.!?;]{0,100}\b(?:required|mandatory)\b", clause, re.I)
+        if not match:
+            match = re.search(r"\b(?:requires|must (?:have|hold|possess))\b[^.!?;]{0,70}" + degree, clause, re.I)
+        if not match:
+            match = re.search(r"(?:basic|minimum) qualifications?\s*:\s*" + degree + r"\b", clause, re.I)
+        if not match:
             continue
-        if re.search(degree + r"[^.!?;]{0,100}\b(?:required|mandatory)\b", clause, re.I) or re.search(r"\b(?:requires|must (?:have|hold|possess))\b[^.!?;]{0,70}" + degree, clause, re.I):
-            return clause.strip()[:300]
-        # A basic/minimum qualification is mandatory even without "required".
-        mandatory = re.split(r"preferred (?:qualifications|skills)", clause, flags=re.I)[0]
-        if re.search(r"(?:basic|minimum) qualifications?\s*:\s*" + degree + r"\b", mandatory, re.I):
-            return mandatory.strip()[:300]
+        # Inspect the credential statement, not unrelated preferred skills later
+        # in a flattened HTML list.
+        context = clause[max(0, match.start()-80):match.end()+30]
+        if re.search(r"preferred|desirable|not required|equivalent experience|bachelor|master|\bMPH\b|\bBS\b|\bBA\b|\bMS\b|\bRN\b", context, re.I):
+            continue
+        return context.strip()[:300]
     return ''
 
 
