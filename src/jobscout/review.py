@@ -51,7 +51,15 @@ def check_availability(job):
                 job.availability_note = 'Employer posting detail returned during this check; verify on application.'
         else:
             text = strip_html(raw)
-            closed = re.search(r'(?:this (?:job|position|posting) (?:is no longer available|has been filled|has been closed)|no longer accepting applications|job (?:not found|does not exist))', text, re.I)
+            closed = re.search(
+                r'(?:this\\s+(?:job(?:\\s+post(?:ing)?)?|position|posting)\\s+'
+                r'(?:is\\s+)?(?:no\\s+longer\\s+(?:available|exists|accepting\\s+applications)|'
+                r'has\\s+been\\s+(?:filled|closed))|'
+                r'(?:job|position|posting)\\s+(?:not\\s+found|does\\s+not\\s+exist)|'
+                r'(?:this\\s+)?(?:job|position|posting)\\s+has\\s+expired|'
+                r'no\\s+longer\\s+accepting\\s+applications)',
+                text, re.I,
+            )
             # Generic career-page redirects are not proof that a posting closed.
             same_path = urllib.parse.urlparse(final_url).path.rstrip('/') == parsed.path.rstrip('/')
             def normalize(s):
