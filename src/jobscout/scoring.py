@@ -290,6 +290,12 @@ def apply_freshness(job: Job, config: dict[str, Any], *, board_initialized: bool
     if age is None:
         fresh_adj = -3
         why.append("unknown posting age -3")
+    elif job.publication_basis == "relative_estimate":
+        fresh_adj = 0
+        why.append("relative posting-date estimate; no freshness bonus")
+    elif job.publication_basis == "feed_timestamp" and age <= 24:
+        fresh_adj = 2
+        why.append("recent feed timestamp (original posting age unverified) +2")
     elif age <= 3:
         fresh_adj = 10
         why.append("posted ≤3h +10")
