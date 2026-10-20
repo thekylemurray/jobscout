@@ -15,10 +15,11 @@ from typing import Any
 from . import __version__
 from .models import Job
 from .review import review_status, verify_candidates
+from .trust import reconcile_requisition, record_verification
 from .paths import RuntimePaths
 from .scoring import application_tier, apply_freshness, dedupe_jobs, freshness_label, score_job
 from .sources import SOURCE_FUNCS
-from .utils import as_text, has_any, iso_now, load_json, now_utc, save_json
+from .utils import as_text, has_any, iso_now, load_json, now_utc, parse_dt, save_json
 
 def fetch_all(config: dict[str, Any], state: dict[str, Any], cache: dict[str, Any], log: list[str], progress=None) -> tuple[list[Job], list[Job]]:
     jobs: list[Job] = []
@@ -70,12 +71,7 @@ def fetch_all(config: dict[str, Any], state: dict[str, Any], cache: dict[str, An
         board_key = f"{b['source']}:{b['board']}"
         initialized = bool((board_state.get(board_key) or {}).get("initialized"))
         for job in raw:
-            prev = seen.get(job.uid)
-            is_new = prev is None
-            if prev and prev.get("first_seen_at"):
-                job.first_seen_at = prev["first_seen_at"]
-            else:
-                seen[job.uid] = {"first_seen_at": job.first_seen_at, "alerted": False}
+            is_new = reconcile_requisition(job, state)
 
             job = score_job(job, config)
             job = apply_freshness(job, config, board_initialized=initialized, is_new=is_new)
@@ -112,7 +108,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
     with paths.eligible_csv.open("w", newline="", encoding="utf-8") as f:
         fields = [
             "priority_score", "fit_score", "company", "title", "location", "workplace",
-            "employment_type", "freshness", "age_hours", "published_at", "updated_at",
+            "employment_type", "freshness", "age_hours", "published_at", "publication_basis", "updated_at",
             "review_status", "availability", "availability_note", "availability_checked_at", "compensation", "role_lane", "lane_confidence", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on"
         ]
         w = csv.DictWriter(f, fieldnames=fields)
@@ -129,6 +125,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "freshness": freshness_label(j),
                 "age_hours": "" if j.age_hours is None else round(j.age_hours, 1),
                 "published_at": j.published_at or "",
+                "publication_basis": j.publication_basis,
                 "updated_at": j.updated_at or "",
                 "review_status": review_status(j),
                 "availability": j.availability,
@@ -147,7 +144,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
     with paths.jobs_csv.open("w", newline="", encoding="utf-8") as f:
         fields = [
             "priority_score", "fit_score", "company", "title", "location", "workplace",
-            "employment_type", "freshness", "age_hours", "published_at", "updated_at",
+            "employment_type", "freshness", "age_hours", "published_at", "publication_basis", "updated_at",
             "review_status", "availability", "availability_note", "availability_checked_at", "compensation", "role_lane", "lane_confidence", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on"
         ]
         w = csv.DictWriter(f, fieldnames=fields)
@@ -164,6 +161,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "freshness": freshness_label(j),
                 "age_hours": "" if j.age_hours is None else round(j.age_hours, 1),
                 "published_at": j.published_at or "",
+                "publication_basis": j.publication_basis,
                 "updated_at": j.updated_at or "",
                 "review_status": review_status(j),
                 "availability": j.availability,
@@ -231,11 +229,20 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
         rec = seen.setdefault(j.uid, {"first_seen_at": j.first_seen_at, "alerted": False})
         if j.discovery_status == "baseline":
             continue
-        is_new_enough = j.age_hours is not None and j.age_hours <= max_age
-        if j.priority_score >= alert_threshold and is_new_enough and not rec.get("alerted", False):
+        hist = state.setdefault("requisitions", {}).get(j.history_key or "", {})
+        # A newly updated feed does not establish that an old role is newly published.
+        first = parse_dt(j.first_seen_at)
+        first_age = (now_utc() - first).total_seconds() / 3600 if first else None
+        is_new_enough = j.fresh and first_age is not None and 0 <= first_age <= max_age
+        verified = j.availability == "Available" if config.get("profile") else True
+        if (j.priority_score >= alert_threshold and is_new_enough and verified
+                and not rec.get("alerted", False) and not hist.get("alerted", False)):
             alerts.append(j)
             rec["alerted"] = True
             rec["alerted_at"] = iso_now()
+            if hist is not None:
+                hist["alerted"] = True
+                hist["alerted_at"] = rec["alerted_at"]
 
     save_json(paths.alerts, [asdict(j) for j in alerts])
     paths.dashboard.write_text(render_html(visible, portable=bool(config.get('profile'))), encoding="utf-8")
@@ -336,6 +343,8 @@ def run_once(paths: RuntimePaths, *, open_dashboard: bool = False, quiet: bool =
     jobs, rejected = fetch_all(config, state, cache, log, progress=progress)
     if config.get('profile'):
         jobs, rejected = verify_candidates(jobs, rejected, progress)
+    for job in jobs + rejected:
+        record_verification(job, state)
     state['last_completed_scan'] = iso_now()
     if any(line.startswith('OK ') for line in log) and not any(line.startswith('FAIL ') for line in log):
         state['last_successful_scan'] = state['last_completed_scan']
