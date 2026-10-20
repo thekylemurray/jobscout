@@ -113,6 +113,21 @@ def test_employer_posting_with_matching_application_is_available(monkeypatch):
     assert check_application(j).availability == "Available"
 
 
+def test_aggregator_requires_employer_application_check(monkeypatch):
+    source_page = "https://remoteok.com/remote-jobs/web-manager"
+    employer_page = "https://employer.org/jobs/web-manager"
+    visits = []
+    def fetch(req, **kwargs):
+        visits.append(req.full_url)
+        return Response("<h1>Web Manager</h1><button>Apply now</button>", req.full_url)
+    monkeypatch.setattr("urllib.request.urlopen", fetch)
+    j = posting(source="remoteok", job_url=source_page, apply_url=employer_page)
+    assert check_application(j).availability == "Available"
+    assert visits == [employer_page]
+    only_aggregator = posting(source="remoteok", job_url=source_page, apply_url=source_page)
+    assert check_application(only_aggregator).availability == "Unverified"
+
+
 def test_alert_requires_verified_job_and_fresh_employer_date(config, tmp_path):
     now = datetime.now(timezone.utc)
     recent = (now - timedelta(hours=2)).isoformat()
