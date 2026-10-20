@@ -98,6 +98,13 @@ def test_blocked_website_and_generic_redirect_remain_unverified(monkeypatch):
     assert check_application(j).availability == "Unverified"
 
 
+def test_career_navigation_does_not_count_as_live_application(monkeypatch):
+    url = "https://employer.org/jobs/web-manager"
+    html = "<h1>Careers</h1><p>Web Manager</p><p>Apply now</p>"
+    monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: Response(html, url))
+    assert check_application(posting(job_url=url, apply_url=url)).availability == "Unverified"
+
+
 def test_employer_posting_with_matching_application_is_available(monkeypatch):
     url = "https://employer.org/jobs/web-manager"
     monkeypatch.setattr("urllib.request.urlopen", lambda *a, **k: Response(
