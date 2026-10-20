@@ -52,12 +52,12 @@ def check_availability(job):
         else:
             text = strip_html(raw)
             closed = re.search(
-                r'(?:this\\s+(?:job(?:\\s+post(?:ing)?)?|position|posting)\\s+'
-                r'(?:is\\s+)?(?:no\\s+longer\\s+(?:available|exists|accepting\\s+applications)|'
-                r'has\\s+been\\s+(?:filled|closed))|'
-                r'(?:job|position|posting)\\s+(?:not\\s+found|does\\s+not\\s+exist)|'
-                r'(?:this\\s+)?(?:job|position|posting)\\s+has\\s+expired|'
-                r'no\\s+longer\\s+accepting\\s+applications)',
+                r'(?:this\s+(?:job(?:\s+post(?:ing)?)?|position|posting)\s+'
+                r'(?:is\s+)?(?:no\s+longer\s+(?:available|exists|accepting\s+applications)|'
+                r'has\s+been\s+(?:filled|closed))|'
+                r'(?:job|position|posting)\s+(?:not\s+found|does\s+not\s+exist)|'
+                r'(?:this\s+)?(?:job|position|posting)\s+has\s+expired|'
+                r'no\s+longer\s+accepting\s+applications)',
                 text, re.I,
             )
             # Generic career-page redirects are not proof that a posting closed.
