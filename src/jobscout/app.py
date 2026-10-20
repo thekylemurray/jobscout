@@ -16,7 +16,9 @@ from .models import Job
 from .paths import RuntimePaths
 from .scoring import application_tier, apply_freshness, dedupe_jobs, freshness_label, score_job
 from .sources import SOURCE_FUNCS
-from .utils import as_text, has_any, iso_now, load_json, now_utc, save_json
+from .trust import observe_requisition, remember_verification
+from .verification import verify_shortlist
+from .utils import as_text, has_any, iso_now, load_json, now_utc, parse_dt, save_json
 
 def fetch_all(config: dict[str, Any], state: dict[str, Any], cache: dict[str, Any], log: list[str]) -> tuple[list[Job], list[Job]]:
     jobs: list[Job] = []
@@ -46,13 +48,7 @@ def fetch_all(config: dict[str, Any], state: dict[str, Any], cache: dict[str, An
             continue
 
         for job in raw:
-            prev = seen.get(job.uid)
-            is_new = prev is None
-            if prev and prev.get("first_seen_at"):
-                job.first_seen_at = prev["first_seen_at"]
-            else:
-                seen[job.uid] = {"first_seen_at": job.first_seen_at, "alerted": False}
-
+            is_new = observe_requisition(job, state)
             job = score_job(job, config)
             job = apply_freshness(job, config, board_initialized=initialized, is_new=is_new)
             if job.eligible:
@@ -88,7 +84,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
     with paths.eligible_csv.open("w", newline="", encoding="utf-8") as f:
         fields = [
             "priority_score", "fit_score", "company", "title", "location", "workplace",
-            "employment_type", "freshness", "age_hours", "published_at", "updated_at",
+            "employment_type", "freshness", "age_hours", "published_at", "publication_basis", "first_seen_at", "updated_at", "availability", "availability_note", "availability_checked_at",
             "compensation", "role_lane", "lane_confidence", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on"
         ]
         w = csv.DictWriter(f, fieldnames=fields)
@@ -105,6 +101,11 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "freshness": freshness_label(j),
                 "age_hours": "" if j.age_hours is None else round(j.age_hours, 1),
                 "published_at": j.published_at or "",
+                "publication_basis": j.publication_basis,
+                "first_seen_at": j.first_seen_at,
+                "availability": j.availability,
+                "availability_note": j.availability_note,
+                "availability_checked_at": j.availability_checked_at,
                 "updated_at": j.updated_at or "",
                 "compensation": j.compensation,
                 "role_lane": j.role_lane,
@@ -119,7 +120,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
     with paths.jobs_csv.open("w", newline="", encoding="utf-8") as f:
         fields = [
             "priority_score", "fit_score", "company", "title", "location", "workplace",
-            "employment_type", "freshness", "age_hours", "published_at", "updated_at",
+            "employment_type", "freshness", "age_hours", "published_at", "publication_basis", "first_seen_at", "updated_at", "availability", "availability_note", "availability_checked_at",
             "compensation", "role_lane", "lane_confidence", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on"
         ]
         w = csv.DictWriter(f, fieldnames=fields)
@@ -136,6 +137,11 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "freshness": freshness_label(j),
                 "age_hours": "" if j.age_hours is None else round(j.age_hours, 1),
                 "published_at": j.published_at or "",
+                "publication_basis": j.publication_basis,
+                "first_seen_at": j.first_seen_at,
+                "availability": j.availability,
+                "availability_note": j.availability_note,
+                "availability_checked_at": j.availability_checked_at,
                 "updated_at": j.updated_at or "",
                 "compensation": j.compensation,
                 "role_lane": j.role_lane,
@@ -193,11 +199,18 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
         rec = seen.setdefault(j.uid, {"first_seen_at": j.first_seen_at, "alerted": False})
         if j.discovery_status == "baseline":
             continue
-        is_new_enough = j.age_hours is not None and j.age_hours <= max_age
-        if j.priority_score >= alert_threshold and is_new_enough and not rec.get("alerted", False):
+        history = state.setdefault("requisitions", {}).get(j.history_key or "", {})
+        first = parse_dt(j.first_seen_at)
+        first_age = (now_utc() - first).total_seconds() / 3600 if first else None
+        is_new_enough = j.fresh and first_age is not None and 0 <= first_age <= max_age
+        if (j.priority_score >= alert_threshold and is_new_enough
+                and j.availability == "Available"
+                and not rec.get("alerted", False) and not history.get("alerted", False)):
             alerts.append(j)
             rec["alerted"] = True
             rec["alerted_at"] = iso_now()
+            history["alerted"] = True
+            history["alerted_at"] = rec["alerted_at"]
 
     save_json(paths.alerts, [asdict(j) for j in alerts])
     paths.dashboard.write_text(render_html(visible), encoding="utf-8")
@@ -207,7 +220,9 @@ def render_html(jobs: list[Job]) -> str:
     tier_order = ["🔥 Apply now", "🟢 Strong matches", "🟡 Worth reviewing", "🔵 Discovery"]
     buckets: dict[str, list[Job]] = {t: [] for t in tier_order}
     for j in jobs:
-        buckets[application_tier(j)].append(j)
+        tier = (application_tier(j) if j.availability == "Available" else
+                ("🟡 Worth reviewing" if j.priority_score >= 58 else "🔵 Discovery"))
+        buckets[tier].append(j)
 
     sections: list[str] = []
     for tier in tier_order:
@@ -229,6 +244,7 @@ def render_html(jobs: list[Job]) -> str:
               <div class='scores'><div class='priority'>{j.priority_score}</div><small>priority</small><div class='fit'>{j.fit_score}% fit</div></div>
               <div class='body'>
                 <div class='topline'><span class='fresh'>{freshness_label(j)}</span><span class='age'>{age}</span><span class='source'>{html.escape(j.source)}</span></div>
+                <p class='status'><strong>Application:</strong> {html.escape(j.availability)} · {html.escape(j.availability_note)}<br><strong>Date evidence:</strong> {html.escape(j.publication_basis or 'unknown')} · First seen: {html.escape(j.first_seen_at)}</p>
                 <h2>{html.escape(j.title)}</h2>
                 <h3>{html.escape(j.company)}</h3>
                 <div class='lane'>{html.escape(j.role_lane)} <span>{j.lane_confidence}% lane confidence</span></div>
@@ -287,6 +303,10 @@ def run_once(paths: RuntimePaths, *, open_dashboard: bool = False, quiet: bool =
     state["version"] = __version__
     log: list[str] = [f"JobScout v{__version__} run {iso_now()}"]
     jobs, rejected = fetch_all(config, state, cache, log)
+    jobs, closed = verify_shortlist(jobs, config, log)
+    rejected.extend(closed)
+    for job in jobs + closed:
+        remember_verification(job, state)
     alerts = write_outputs(jobs, rejected, config, state, paths)
     save_json(paths.state, state)
     save_json(paths.cache, cache)

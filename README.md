@@ -101,6 +101,10 @@ output/
 
 Runtime files are ignored by Git.
 
+## Phase 1 — application trust (CLI preview)
+
+The personal CLI can now check high-priority employer application pages before recommending them, label the reliability of posting dates, and retain requisition history across repeated scans. Closed posts are excluded; blocked, JavaScript-only, and otherwise uncertain postings remain reviewable rather than falsely classified as closed. Automatic alerts require a recent direct-employer timestamp and a confirmed accessible application. See [Phase 1 trust checks](docs/TRUST_PHASE1.md) for the precise rules and limitations.
+
 ## Scoring at a glance
 
 JobScout first asks: **what kind of job is this?** Only after a coherent lane is established does it score evidence.
