@@ -207,3 +207,33 @@ def test_labeled_pay_below_floor_is_excluded_with_inference(profile_config):
 def test_md_city_does_not_generate_review_warning(profile_config):
     j = score_job(job(description='Biotech vaccines. Office in Rockville, MD.'), profile_config)
     assert not any('review MD:' in risk for risk in j.risks)
+
+
+def test_salary_decisions_do_not_bypass_other_criteria(profile_config):
+    profile_config['salary_floor'] = 200000
+    profile_config['profile']['salary_overrides'] = {'https://example.com': {'ignore_inference': True}}
+    desc = 'Pay Range: $160,000-$180,000 USD Benefits: medical.'
+    j = score_job(job(description=desc), profile_config)
+    assert j.eligible and any('salary unverified' in r for r in j.risks)
+    profile_config['profile']['salary_overrides']['https://example.com'] = {'annual_min': 210000, 'annual_max': 230000}
+    j = score_job(job(description=desc), profile_config)
+    assert j.eligible and '210000-230000' in j.compensation
+    assert not score_job(job(description=desc, location='Boston', workplace='Hybrid'), profile_config).eligible
+    profile_config['profile']['salary_overrides']['https://example.com'] = {'annual_min': 230000, 'annual_max': 210000}
+    assert validate_config(profile_config)
+
+
+def test_failed_scan_does_not_replace_last_successful_timestamp(tmp_path, monkeypatch, profile_config):
+    from jobscout.app import run_once
+    from jobscout.paths import RuntimePaths
+    from jobscout.utils import load_json
+    profile_config['boards'] = [{'company': 'Example', 'source': 'greenhouse', 'board': 'example'}]
+    monkeypatch.setitem(sources.SOURCE_FUNCS, 'greenhouse', lambda *a: [])
+    write_config(tmp_path/'config.json', profile_config)
+    paths = RuntimePaths.from_home(tmp_path)
+    run_once(paths, quiet=True)
+    before = load_json(paths.state, {})['last_successful_scan']
+    def fail(*a): raise OSError('Unavailable')
+    monkeypatch.setitem(sources.SOURCE_FUNCS, 'greenhouse', fail)
+    run_once(paths, quiet=True)
+    assert load_json(paths.state, {})['last_successful_scan'] == before

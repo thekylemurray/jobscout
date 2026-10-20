@@ -32,3 +32,6 @@ class Job:
     score_breakdown: list[str] | None = None
     priority_reasons: list[str] | None = None
     also_found_on: list[str] | None = None
+    availability: str = 'Unverified'
+    availability_note: str = 'Availability has not been checked.'
+    availability_checked_at: str = ''

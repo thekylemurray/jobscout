@@ -61,3 +61,13 @@ Known Maryland city/state references no longer trigger MD degree review warnings
 A labeled USD `Pay Range` in a full-time posting can now be treated as annual when the period is unstated and both bounds exceed $10,000. The inferred period is explicitly recorded in compensation, risks and any below-floor rejection. Hourly/monthly/weekly, total-pay, bonus, non-USD, and non-full-time cases are not inferred. This is a narrow heuristic and should be checked in the rejection report if pay terms are ambiguous.
 
 Fit measures recognized experience signals, not a probability or percentage of qualification. Priority additionally considers freshness. These corrections may raise or lower scores; they do not establish that a candidate meets every requirement. Existing profiles work without reimporting.
+
+### Version 1.4 handoff and verification
+
+- Portable dashboards use Worth reviewing / Needs verification rather than score-based Apply now tiers. Any review note or unverified availability keeps a posting in Needs verification, regardless of score. Excluded postings remain in the scan report, with salary assumptions visible.
+- Candidate availability is checked with a fresh request before display. Workday uses its public detail endpoint; other sources require a matching title and application text on the posting page. Explicit closed-page text and HTTP 404/410 exclude the posting. Timeouts, HTTP 403/429/5xx, generic redirects and JavaScript-only pages remain Unverified. Availability can change after checking; this is not a guarantee of hiring activity.
+- Salary review permits exact-URL corrections: automatic, ignore an inferred period, or a user-confirmed annual USD base range. A profile-wide checkbox can disable inference. Save then search again; location and qualification exclusions still apply. Corrections are local to the profile and do not change the employer posting.
+- The desktop remembers its saved profile, shows version and last successful source-search time, and includes a Start here tab plus Open results folder. Long forms scroll at smaller window sizes. A failed/partial source search does not update the last-successful timestamp.
+- `review-jobs.json` stores the last run's scored postings locally so Salary review can list its decisions. CSV exports include availability and review status; exclusions include compensation. No personal profile or resume is bundled into the build.
+
+Windows validation covers a fresh temporary profile, an offline synthetic scan, salary decisions, restoring the saved profile after restart, scrolling at minimum window size, opening the results folder, and launching the packaged executable. See START_HERE.txt in the download for recipient instructions.

@@ -44,4 +44,5 @@ jobs:
           path: |
             dist/JobScout.exe
             docs/DESKTOP.md
+            docs/START_HERE.txt
           retention-days: 30

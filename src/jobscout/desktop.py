@@ -12,6 +12,7 @@ import webbrowser
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+from . import __version__
 from .app import render_html, run_once
 from .config import default_config, validate_config
 from .models import Job
@@ -19,7 +20,7 @@ from .paths import RuntimePaths
 from .profiles import LIST_FIELDS, blank_profile
 from .scoring import apply_freshness, score_job
 from .sources import SOURCE_FUNCS
-from .utils import iso_now
+from .utils import iso_now, load_json, save_json
 
 
 def desktop_home() -> Path:
@@ -36,12 +37,26 @@ def write_config(path: Path, config: dict) -> None:
     temp.replace(path)
 
 
+def scrollable_tab(parent):
+    tab = ttk.Frame(parent)
+    canvas = tk.Canvas(tab, highlightthickness=0)
+    bar = ttk.Scrollbar(tab, orient='vertical', command=canvas.yview)
+    canvas.configure(yscrollcommand=bar.set)
+    bar.pack(side='right', fill='y')
+    canvas.pack(side='left', fill='both', expand=True)
+    content = ttk.Frame(canvas, padding=12)
+    window = canvas.create_window((0, 0), window=content, anchor='nw')
+    content.bind('<Configure>', lambda event: canvas.configure(scrollregion=canvas.bbox('all')))
+    canvas.bind('<Configure>', lambda event: canvas.itemconfigure(window, width=event.width))
+    return tab, content
+
+
 class Desktop:
     def __init__(self, root: tk.Tk, home: Path):
         self.root, self.home = root, home
         self.busy = False
         self.messages = queue.Queue()
-        root.title('JobScout — Your job search')
+        root.title(f'JobScout v{__version__} — Your job search')
         root.geometry('1000x800')
         root.minsize(850, 650)
         self.config = default_config()
@@ -49,15 +64,27 @@ class Desktop:
         self.path = home / 'profiles' / uuid.uuid4().hex / 'config.json'
         top = ttk.Frame(root, padding=12)
         top.pack(fill='x')
-        ttk.Label(top, text='JobScout', font=('Segoe UI', 20, 'bold')).pack(side='left')
+        ttk.Label(top, text=f'JobScout v{__version__}', font=('Segoe UI', 20, 'bold')).pack(side='left')
         for label, command in [('New profile', self.new), ('Import profile', self.import_profile),
                                ('Open saved profile', self.open_profile), ('Save', self.save)]:
             ttk.Button(top, text=label, command=command).pack(side='left', padx=5)
         self.tabs = ttk.Notebook(root)
         self.tabs.pack(fill='both', expand=True, padx=12)
+        guide = ttk.Frame(self.tabs, padding=20)
+        self.tabs.add(guide, text='Start here')
+        ttk.Label(guide, text='Your first search', font=('Segoe UI', 18, 'bold')).pack(anchor='w')
+        ttk.Label(guide, text=(
+            '1. Choose Import profile and select the supplied JSON file. You only need to import it once.\n\n'
+            '2. Check Search preferences and Job sources, then choose Save.\n\n'
+            '3. Choose Search configured sources. Keep JobScout open until it finishes; a broad search can take several minutes.\n\n'
+            '4. Choose Open results. Read the verification notes before applying. A score is not a percentage of qualification.\n\n'
+            '5. Use Salary review to correct a pay assumption, then search again. Use Scan report / exclusions to inspect filtered jobs.\n\n'
+            'Your saved profile opens automatically next time. Open results folder gives you the CSV files to share for troubleshooting.\n\n'
+            'Applications happen on the employer website. JobScout does not submit applications or send your résumé.'
+        ), wraplength=760, justify='left').pack(anchor='w', pady=16)
         self.fields = {}
-        form = ttk.Frame(self.tabs, padding=12)
-        self.tabs.add(form, text='Search preferences')
+        preferences, form = scrollable_tab(self.tabs)
+        self.tabs.add(preferences, text='Search preferences')
         labels = {'name': 'Profile name', 'title_terms': 'Target titles (separate with semicolons)',
                   'seniority_terms': 'Seniority (semicolons; blank allows all)',
                   'core_skills': 'Core skills / experience (semicolons)', 'industry_terms': 'Industry signals (semicolons)',
@@ -108,14 +135,50 @@ class Desktop:
         manual.columnconfigure(1, weight=1)
         manual.rowconfigure(7, weight=1)
         ttk.Button(manual, text='Evaluate posting', command=self.evaluate).grid(row=8, column=1, sticky='w')
+        salary_page, salary_tab = scrollable_tab(self.tabs)
+        self.tabs.add(salary_page, text='Salary review')
+        self.infer_pay = tk.BooleanVar(value=True)
+        ttk.Checkbutton(salary_tab, text='Allow annual-period inference for labeled full-time USD pay ranges', variable=self.infer_pay).pack(anchor='w')
+        ttk.Label(salary_tab, text='Review an individual posting below. Corrections apply to this exact URL on the next search.\nOther location, title and qualification rules still apply.', wraplength=800).pack(anchor='w', pady=8)
+        self.salary_list = tk.Listbox(salary_tab, height=9)
+        self.salary_list.pack(fill='both', expand=True)
+        self.salary_list.bind('<<ListboxSelect>>', self.select_salary)
+        self.salary_url = tk.StringVar()
+        ttk.Label(salary_tab, text='Posting URL (select above or paste the exact application URL)').pack(anchor='w')
+        ttk.Entry(salary_tab, textvariable=self.salary_url).pack(fill='x')
+        self.salary_mode = tk.StringVar(value='Automatic')
+        ttk.Combobox(salary_tab, textvariable=self.salary_mode, state='readonly',
+                     values=['Automatic', 'Ignore annual-period inference', 'Use confirmed annual USD base range']).pack(fill='x', pady=5)
+        self.salary_min, self.salary_max = tk.StringVar(), tk.StringVar()
+        amounts = ttk.Frame(salary_tab)
+        amounts.pack(fill='x')
+        for label, var in [('Annual minimum', self.salary_min), ('Annual maximum', self.salary_max)]:
+            ttk.Label(amounts, text=label).pack(side='left', padx=5)
+            ttk.Entry(amounts, textvariable=var, width=15).pack(side='left')
+        ttk.Button(salary_tab, text='Save salary decision', command=self.save_salary).pack(anchor='w', pady=8)
+        self.salary_rows = []
         bottom = ttk.Frame(root, padding=12)
         bottom.pack(fill='x')
         self.scan_button = ttk.Button(bottom, text='Search configured sources', command=self.scan)
         self.scan_button.pack(side='left')
         ttk.Button(bottom, text='Open results', command=self.results).pack(side='left', padx=8)
         ttk.Button(bottom, text='Scan report / exclusions', command=self.log).pack(side='left')
+        ttk.Button(bottom, text='Open results folder', command=self.results_folder).pack(side='left', padx=8)
+        self.last_scan = tk.StringVar(value='No successful search yet for this profile.')
+        ttk.Label(root, textvariable=self.last_scan, padding=(12, 0)).pack(fill='x')
         self.status = tk.StringVar(value='Import a search profile, or fill in preferences and save.')
         ttk.Label(root, textvariable=self.status, wraplength=950, padding=12).pack(fill='x')
+        settings = load_json(home / 'settings.json', {})
+        previous = settings.get('last_profile') if isinstance(settings, dict) else None
+        if previous:
+            try:
+                candidate = load_json(Path(previous), {})
+                if isinstance(candidate, dict) and candidate.get('profile') and not validate_config(candidate):
+                    self.path, self.config = Path(previous), candidate
+                    self.status.set('Saved profile restored. Search again for current results.')
+                    self.tabs.select(preferences)
+            except (OSError, TypeError, ValueError):
+                self.status.set('Previous profile unavailable. Import or open a saved profile.')
         self.populate()
         root.protocol('WM_DELETE_WINDOW', self.close)
         root.after(200, self.poll)
@@ -134,7 +197,60 @@ class Desktop:
         self.remote.set(p['allow_remote'])
         self.contract.set(p['allow_contract'])
         self.no_doctorate.set(p.get('exclude_required_doctorate', False))
+        self.infer_pay.set(p.get('infer_annual_pay', True))
         self.refresh_sources()
+        self.refresh_review()
+
+    def refresh_review(self):
+        paths = RuntimePaths.from_home(self.path.parent)
+        state = load_json(paths.state, {})
+        stamp = state.get('last_successful_scan')
+        self.last_scan.set('Last successful source search (UTC): ' + stamp if stamp else 'No successful source search yet for this profile.')
+        self.salary_rows = [j for j in load_json(paths.output_dir / 'review-jobs.json', [])
+                            if j.get('eligible') or 'salary' in j.get('veto_reason', '').lower()]
+        self.salary_list.delete(0, 'end')
+        for j in self.salary_rows:
+            decision = 'Review' if j.get('eligible') else 'Excluded'
+            self.salary_list.insert('end', f"{decision} — {j['company']} — {j['title']} — {j.get('compensation') or 'Salary unknown'}")
+
+    def remember_profile(self):
+        save_json(self.home / 'settings.json', {'last_profile': str(self.path.resolve())})
+
+    def select_salary(self, event=None):
+        if not self.salary_list.curselection():
+            return
+        j = self.salary_rows[self.salary_list.curselection()[0]]
+        url = j.get('apply_url') or j.get('job_url') or ''
+        self.salary_url.set(url)
+        override = self.config['profile'].get('salary_overrides', {}).get(url, {})
+        self.salary_min.set(str(override.get('annual_min', '')))
+        self.salary_max.set(str(override.get('annual_max', '')))
+        self.salary_mode.set('Use confirmed annual USD base range' if 'annual_min' in override else
+                             'Ignore annual-period inference' if override.get('ignore_inference') else 'Automatic')
+
+    def save_salary(self):
+        if not self.available():
+            return
+        try:
+            url = self.salary_url.get().strip()
+            if not url.startswith(('https://', 'http://')):
+                raise ValueError('Select a posting or enter its exact application URL.')
+            candidate = self.collect()
+            overrides = candidate['profile'].setdefault('salary_overrides', {})
+            mode = self.salary_mode.get()
+            if mode == 'Automatic':
+                overrides.pop(url, None)
+            elif mode == 'Ignore annual-period inference':
+                overrides[url] = {'ignore_inference': True}
+            else:
+                overrides[url] = {key: float(var.get().replace(',', '').replace('$', '')) for key, var in
+                                  [('annual_min', self.salary_min), ('annual_max', self.salary_max)]}
+            write_config(self.path, candidate)
+            self.config = candidate
+            self.remember_profile()
+            self.status.set('Salary decision saved. Search again to refresh results; other criteria still apply.')
+        except (OSError, ValueError, TypeError) as exc:
+            messagebox.showerror('Check salary decision', str(exc))
 
     def refresh_sources(self):
         self.source_list.delete(0, 'end')
@@ -155,6 +271,7 @@ class Desktop:
                 c['profile'][key] = text
         c['profile']['allow_remote'], c['profile']['allow_contract'] = self.remote.get(), self.contract.get()
         c['profile']['exclude_required_doctorate'] = self.no_doctorate.get()
+        c['profile']['infer_annual_pay'] = self.infer_pay.get()
         errors = validate_config(c)
         if errors:
             raise ValueError('\n'.join(errors))
@@ -166,6 +283,7 @@ class Desktop:
         try:
             self.config = self.collect()
             write_config(self.path, self.config)
+            self.remember_profile()
             self.status.set(f"Saved {self.config['profile']['name']} on this computer.")
             return True
         except (ValueError, OSError, TypeError) as exc:
@@ -207,6 +325,7 @@ class Desktop:
             path = Path(filename).resolve() if existing else self.home / 'profiles' / uuid.uuid4().hex / 'config.json'
             write_config(path, candidate)
             self.path, self.config = path, candidate
+            self.remember_profile()
             self.populate()
             self.status.set('Profile loaded. Review preferences, then search or check a posting.')
         except (OSError, ValueError, TypeError, KeyError) as exc:
@@ -258,11 +377,20 @@ class Desktop:
                 self.status.set('Search failed. Your saved preferences are intact.')
                 messagebox.showerror('Search failed', detail)
             else:
+                self.refresh_review()
                 summary = [x for x in detail.splitlines() if x.startswith(('ELIGIBLE ', 'SOURCE_HEALTH '))]
                 self.status.set(' | '.join(summary) + '. Open results; use Scan report / exclusions for coverage and rejected jobs.')
         except queue.Empty:
             pass
         self.root.after(200, self.poll)
+
+    def results_folder(self):
+        folder = RuntimePaths.from_home(self.path.parent).output_dir
+        folder.mkdir(parents=True, exist_ok=True)
+        if os.name == 'nt':
+            os.startfile(str(folder))
+        else:
+            webbrowser.open(folder.resolve().as_uri())
 
     def results(self):
         self.open_file(RuntimePaths.from_home(self.path.parent).dashboard)
@@ -297,7 +425,7 @@ class Desktop:
             return
         path = self.path.parent / 'output' / 'manual-review.html'
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(render_html([job]), encoding='utf-8')
+        path.write_text(render_html([job], portable=True), encoding='utf-8')
         self.open_file(path)
 
     def close(self):

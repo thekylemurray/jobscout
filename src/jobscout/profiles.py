@@ -37,6 +37,21 @@ def validate_profile(profile: Any) -> list[str]:
             errors.append(f'{key} must be true or false')
     if 'exclude_required_doctorate' in profile and not isinstance(profile['exclude_required_doctorate'], bool):
         errors.append('exclude_required_doctorate must be true or false')
+    if 'infer_annual_pay' in profile and not isinstance(profile['infer_annual_pay'], bool):
+        errors.append('infer_annual_pay must be true or false')
+    overrides = profile.get('salary_overrides', {})
+    if not isinstance(overrides, dict):
+        errors.append('salary_overrides must be an object')
+    else:
+        for url, override in overrides.items():
+            if not isinstance(url, str) or not url.startswith(('http://', 'https://')) or not isinstance(override, dict):
+                errors.append('salary overrides require a posting URL and settings')
+                continue
+            if override == {'ignore_inference': True}:
+                continue
+            low, high = override.get('annual_min'), override.get('annual_max')
+            if type(low) not in (int, float) or type(high) not in (int, float) or not 0 <= low <= high < float('inf'):
+                errors.append('confirmed annual salary bounds must be finite nonnegative numbers in order')
     return errors
 
 
@@ -164,10 +179,14 @@ def score_profile(job: Job, config: dict[str, Any]) -> Job:
         job.risks.append('employment type missing; confirm permanent employment')
     if p['industry_terms'] and not has_any(desc, p['industry_terms']):
         job.risks.append('industry not established from posting; verify employer sector')
+    override = p.get('salary_overrides', {}).get(job.apply_url or job.job_url, {})
+    if 'annual_min' in override:
+        job.compensation = f"USD {override['annual_min']:g}-{override['annual_max']:g} annual base"
+        job.risks.append('annual USD base salary supplied by you; confirm accuracy with employer')
     if not job.compensation:
         job.compensation = salary_from_description(desc)
     salary = annual_usd(as_text(job.compensation))
-    if not salary:
+    if not salary and p.get('infer_annual_pay', True) and not override.get('ignore_inference'):
         inferred = labeled_full_time_pay(desc, job.employment_type)
         if inferred:
             job.compensation = inferred
