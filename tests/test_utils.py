@@ -28,5 +28,5 @@ def test_nested_qualification_headings_remain_distinct():
     sections = extract_sections(text)
     assert "Sitecore" in sections["required"]
     assert "Drupal" not in sections["required"]
-    assert "Dr​upal".replace("\u200b", "") in sections["preferred"]
+    assert "Drupal" in sections["preferred"]
     assert "UAT" in sections["responsibilities"]
