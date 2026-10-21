@@ -101,6 +101,10 @@ output/
 
 Runtime files are ignored by Git.
 
+## Phase 2 — requirement-aware matching (personal CLI)
+
+The personal command-line edition now rejects software-engineering occupations even when their titles contain web terms, caps over-senior/agency-account-heavy roles, and separates **required** from **preferred** qualifications. A local-only optional candidate_evidence.json file lets you mark specific capabilities demonstrated, transferable or explicitly not demonstrated. Unassessed means *unknown*, not unqualified. Output CSVs and the dashboard explain gaps and occupational-scope warnings. See [Requirement-aware scoring](docs/REQUIREMENT_SCORING.md).
+
 ## Phase 1 — application trust (CLI preview)
 
 The personal CLI can now check high-priority employer application pages before recommending them, label the reliability of posting dates, and retain requisition history across repeated scans. Closed posts are excluded; blocked, JavaScript-only, and otherwise uncertain postings remain reviewable rather than falsely classified as closed. Automatic alerts require a recent direct-employer timestamp and a confirmed accessible application. See [Phase 1 trust checks](docs/TRUST_PHASE1.md) for the precise rules and limitations.
