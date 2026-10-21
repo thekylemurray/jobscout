@@ -18,3 +18,15 @@ def test_company_aliases():
 def test_geo_context_suppresses_geospatial():
     assert not has_meaningful_term("GIS geospatial geographic mapping", "geo")
     assert has_meaningful_term("SEO AEO GEO generative search", "geo")
+
+
+def test_nested_qualification_headings_remain_distinct():
+    from jobscout.utils import extract_sections
+    text = ("Required Qualifications: Sitecore experience and technical SEO. "
+            "Responsibilities: CMS publishing, UAT. "
+            "Preferred Qualifications: Drupal and HubSpot.")
+    sections = extract_sections(text)
+    assert "Sitecore" in sections["required"]
+    assert "Drupal" not in sections["required"]
+    assert "Dr​upal".replace("\u200b", "") in sections["preferred"]
+    assert "UAT" in sections["responsibilities"]
