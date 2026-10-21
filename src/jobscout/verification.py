@@ -219,12 +219,27 @@ def check_application(job, timeout: int = 8):
     return job
 
 
-def select_verification_candidates(jobs, config: dict):
-    """Spend HTTP checks on plausible roles and primarily employer-hosted pages.
+AGGREGATOR_SOURCES = frozenset({"remoteok", "jobicy", "himalayas", "wwr"})
+AGGREGATOR_HOSTS = ("remoteok.com", "jobicy.com", "himalayas.app",
+                    "weworkremotely.com")
 
-    Employer ATS posts are more often verifiable than aggregator summaries.
-    Reserve 75 percent of the available checks for direct sources when possible,
-    without hiding fresh aggregator discoveries from manual review.
+
+def _has_external_application(job) -> bool:
+    """Aggregator job-list pages are not proof an employer is accepting applications."""
+    if job.source not in AGGREGATOR_SOURCES:
+        return True
+    apply_url = job.apply_url or ""
+    if not _safe_public_url(apply_url):
+        return False
+    host = (urllib.parse.urlsplit(apply_url).hostname or "").lower()
+    return not any(host == root or host.endswith("." + root) for root in AGGREGATOR_HOSTS)
+
+
+def select_verification_candidates(jobs, config: dict):
+    """Verify plausible employer applications, not aggregator search results.
+
+    Source coverage is not a target: 10 meaningful checks are better than 40
+    HTTP 403s. Unsupported aggregators remain in results for manual review.
     """
     max_checks = max(0, min(int(config.get("verification_max_per_scan", 40)), 100))
     min_fit = float(config.get("dashboard_threshold", 52))
@@ -232,23 +247,26 @@ def select_verification_candidates(jobs, config: dict):
     ranking = lambda j: (j.fresh, j.priority_score, j.fit_score)
     direct = sorted((j for j in eligible if j.source in DIRECT_SOURCES),
                     key=ranking, reverse=True)
-    other = sorted((j for j in eligible if j.source not in DIRECT_SOURCES),
-                   key=ranking, reverse=True)
-    direct_first = direct[:int(max_checks * 0.75)]
-    remaining = max_checks - len(direct_first)
-    selected = direct_first + other[:remaining]
-    remaining = max_checks - len(selected)
-    if remaining:
-        selected += direct[len(direct_first):len(direct_first) + remaining]
-    return selected
+    linked = sorted((j for j in eligible if j.source not in DIRECT_SOURCES
+                     and _has_external_application(j)), key=ranking, reverse=True)
+    # Prefer employer-sourced records; never burn a check on aggregator-only URLs.
+    return (direct + linked)[:max_checks]
 
 
 def verify_shortlist(jobs, config: dict, log: list[str]):
     """Check the strongest matches in parallel without slowing every feed query."""
     candidates = select_verification_candidates(jobs, config)
-    log.append(f"APPLICATION_CHECK_SCOPE {len(candidates)} checked / "
+    ids = {id(j) for j in candidates}
+    for job in jobs:
+        if (id(job) not in ids and job.source in AGGREGATOR_SOURCES
+                and not _has_external_application(job)):
+            job.availability_note = "Aggregator-only link; employer application not independently verifiable."
+    skipped = sum(j.source in AGGREGATOR_SOURCES and not _has_external_application(j)
+                  for j in jobs)
+    log.append(f"APPLICATION_CHECK_SCOPE {len(candidates)} requested / "
                f"{sum(j.source in DIRECT_SOURCES for j in candidates)} employer-hosted / "
-               f"{len(candidates) - sum(j.source in DIRECT_SOURCES for j in candidates)} others")
+               f"{len(candidates) - sum(j.source in DIRECT_SOURCES for j in candidates)} employer-linked aggregators / "
+               f"{skipped} aggregator-only skipped")
     with ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(check_application, candidates))
     retained, closed = [], []
