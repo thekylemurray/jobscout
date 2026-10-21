@@ -161,8 +161,8 @@ def test_verification_prioritizes_employer_sources_and_fit(config):
                          fit_score=48, priority_score=63, fresh=True)]
     checked = select_verification_candidates(aggregator + direct + unrelated, config)
     assert len(checked) == 12
-    assert sum(j.source == "greenhouse" for j in checked) == 9
-    assert sum(j.source == "himalayas" for j in checked) == 3
+    assert sum(j.source == "greenhouse" for j in checked) == 12
+    assert sum(j.source == "himalayas" for j in checked) == 0
     assert unrelated[0] not in checked
 
 
@@ -239,3 +239,24 @@ def test_structured_api_error_does_not_automatically_close(monkeypatch):
     j = posting(uid="greenhouse:example:12345", source="greenhouse",
                 job_url=original, apply_url=original)
     assert check_application(j).availability == "Unverified"
+
+
+def test_aggregator_only_links_do_not_consume_verification_requests(config):
+    config["verification_max_per_scan"] = 40
+    direct = [posting(uid=f"direct-{n}", source="greenhouse",
+                      fit_score=80, priority_score=82) for n in range(10)]
+    aggregator = [posting(uid=f"agg-{n}", source="himalayas",
+                          job_url=f"https://himalayas.app/jobs/{n}",
+                          apply_url=f"https://himalayas.app/jobs/{n}",
+                          fit_score=96, priority_score=99) for n in range(70)]
+    selected = select_verification_candidates(aggregator + direct, config)
+    assert len(selected) == 10
+    assert all(j.source == "greenhouse" for j in selected)
+
+
+def test_external_employer_link_from_aggregator_is_reviewed(config):
+    config["verification_max_per_scan"] = 40
+    j = posting(source="himalayas", job_url="https://himalayas.app/jobs/123",
+                apply_url="https://job-boards.greenhouse.io/acme/jobs/123",
+                fit_score=85, priority_score=90)
+    assert select_verification_candidates([j], config) == [j]
