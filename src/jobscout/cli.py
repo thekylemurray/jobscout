@@ -9,6 +9,7 @@ from .app import render_html, run_once, watch
 from .config import default_config, validate_config
 from .demo import demo_jobs
 from .paths import RuntimePaths
+from .requirements import validate_candidate_evidence
 from .utils import load_json
 
 
@@ -55,6 +56,22 @@ def _doctor(paths: RuntimePaths) -> int:
         for error in errors:
             print(f"FAIL {error}")
         return 1
+
+    evidence_path = paths.home / "candidate_evidence.json"
+    if evidence_path.exists():
+        try:
+            evidence = json.loads(evidence_path.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError) as exc:
+            print(f"FAIL local candidate evidence: {exc}")
+            return 1
+        problems = validate_candidate_evidence(evidence)
+        if problems:
+            for problem in problems:
+                print(f"FAIL candidate evidence: {problem}")
+            return 1
+        print(f"PASS local candidate evidence: {evidence_path}")
+    else:
+        print("NOTE: No local candidate evidence; skills will remain unassessed.")
 
     enabled = sum(1 for board in config["boards"] if board.get("enabled", True))
     print(f"PASS config: {paths.config}")
