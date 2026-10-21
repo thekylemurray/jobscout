@@ -87,3 +87,30 @@ def test_report_explains_required_evidence_and_scope(tmp_path, config):
     assert row["required_gaps"] == "technical seo"
     assert row["requirement_coverage"]
     assert "Director-level" in row["scope_flags"]
+
+
+
+def test_doctor_confirms_valid_private_evidence(tmp_path, config, capsys):
+    from jobscout.cli import _doctor
+    paths = RuntimePaths.from_home(tmp_path)
+    paths.ensure()
+    config["boards"] = []
+    paths.config.write_text(json.dumps(config), encoding="utf-8")
+    (tmp_path / "candidate_evidence.json").write_text(
+        json.dumps({"demonstrated": ["sitecore"], "transferable": [],
+                    "not_demonstrated": []}), encoding="utf-8")
+    assert _doctor(paths) == 0
+    assert "PASS local candidate evidence" in capsys.readouterr().out
+
+
+def test_doctor_rejects_conflicting_private_evidence(tmp_path, config, capsys):
+    from jobscout.cli import _doctor
+    paths = RuntimePaths.from_home(tmp_path)
+    paths.ensure()
+    config["boards"] = []
+    paths.config.write_text(json.dumps(config), encoding="utf-8")
+    (tmp_path / "candidate_evidence.json").write_text(
+        json.dumps({"demonstrated": ["sitecore"], "transferable": ["sitecore"]}),
+        encoding="utf-8")
+    assert _doctor(paths) == 1
+    assert "FAIL candidate evidence" in capsys.readouterr().out
