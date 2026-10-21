@@ -290,7 +290,8 @@ def score_job(job: Job, config: dict[str, Any]) -> Job:
     score = max(0, min(96, round(score)))
     job.fit_score = int(score)
     job.reasons = list(dict.fromkeys(reasons))[:8]
-    job.risks = list(dict.fromkeys(risks))[:6]
+    # Surface occupational blockers before less important adjacent-specialty notes.
+    job.risks = list(dict.fromkeys(scope_flags + risks))[:8]
     job.score_breakdown = (breakdown[:11] + breakdown[-3:] if len(breakdown) > 14 else breakdown)
     return job
 
