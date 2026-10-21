@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 import html
 import os
 import time
@@ -13,6 +14,7 @@ from typing import Any
 
 from . import __version__
 from .models import Job
+from .requirements import validate_candidate_evidence
 from .paths import RuntimePaths
 from .scoring import application_tier, apply_freshness, dedupe_jobs, freshness_label, score_job
 from .sources import SOURCE_FUNCS
@@ -85,7 +87,8 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
         fields = [
             "priority_score", "fit_score", "company", "title", "source", "location", "workplace",
             "employment_type", "freshness", "age_hours", "published_at", "publication_basis", "first_seen_at", "updated_at", "availability", "availability_note", "availability_checked_at",
-            "compensation", "role_lane", "lane_confidence", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on"
+            "compensation", "role_lane", "lane_confidence", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on",
+            "requirement_coverage", "required_gaps", "scope_flags", "requirement_evidence"
         ]
         w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
@@ -116,13 +119,21 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "risks": "; ".join(j.risks or []),
                 "priority_reasons": "; ".join(j.priority_reasons or []),
                 "also_found_on": "; ".join(j.also_found_on or []),
+                "requirement_coverage": j.requirement_coverage,
+                "required_gaps": "; ".join(j.requirement_gaps or []),
+                "scope_flags": "; ".join(j.scope_flags or []),
+                "requirement_evidence": "; ".join(
+                    f"{x['importance']} | {x['requirement']} | {x['assessment']}"
+                    for x in (j.requirements or [])),
+
             })
 
     with paths.jobs_csv.open("w", newline="", encoding="utf-8") as f:
         fields = [
             "priority_score", "fit_score", "company", "title", "source", "location", "workplace",
             "employment_type", "freshness", "age_hours", "published_at", "publication_basis", "first_seen_at", "updated_at", "availability", "availability_note", "availability_checked_at",
-            "compensation", "role_lane", "lane_confidence", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on"
+            "compensation", "role_lane", "lane_confidence", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on",
+            "requirement_coverage", "required_gaps", "scope_flags", "requirement_evidence"
         ]
         w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
@@ -153,6 +164,13 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "risks": "; ".join(j.risks or []),
                 "priority_reasons": "; ".join(j.priority_reasons or []),
                 "also_found_on": "; ".join(j.also_found_on or []),
+                "requirement_coverage": j.requirement_coverage,
+                "required_gaps": "; ".join(j.requirement_gaps or []),
+                "scope_flags": "; ".join(j.scope_flags or []),
+                "requirement_evidence": "; ".join(
+                    f"{x['importance']} | {x['requirement']} | {x['assessment']}"
+                    for x in (j.requirements or [])),
+
             })
 
     # Near misses: rejected jobs whose titles still contain one of the broad lane
@@ -207,8 +225,9 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
         first = parse_dt(j.first_seen_at)
         first_age = (now_utc() - first).total_seconds() / 3600 if first else None
         is_new_enough = j.fresh and first_age is not None and 0 <= first_age <= max_age
-        if (j.priority_score >= alert_threshold and is_new_enough
-                and j.availability == "Available"
+        if (j.priority_score >= alert_threshold
+                and j.fit_score >= config.get("min_alert_fit_score", 75)
+                and is_new_enough and j.availability == "Available"
                 and not rec.get("alerted", False) and not history.get("alerted", False)):
             alerts.append(j)
             rec["alerted"] = True
@@ -241,6 +260,13 @@ def render_html(jobs: list[Job]) -> str:
             breakdown = "".join(f"<li>{html.escape(x)}</li>" for x in (j.score_breakdown or []))
             pri = "".join(f"<li>{html.escape(x)}</li>" for x in (j.priority_reasons or []))
             risk_block = f"<div class='risks'><strong>Watch:</strong><ul>{risks}</ul></div>" if risks else ""
+            req_items = "".join(
+                "<li>" + html.escape(x["importance"] + ": " + x["requirement"] +
+                                     " — " + x["assessment"]) + "</li>"
+                for x in (j.requirements or []))
+            req_detail = ("<details><summary>Requirement evidence</summary><p>" +
+                          html.escape(j.requirement_coverage) + "</p><ul>" + req_items +
+                          "</ul></details>") if j.requirements else ""
             comp = f"<span>{html.escape(j.compensation)}</span>" if j.compensation else ""
             duplicate = f"<span>also: {html.escape(', '.join(j.also_found_on or []))}</span>" if j.also_found_on else ""
             cards.append(f"""
@@ -254,6 +280,7 @@ def render_html(jobs: list[Job]) -> str:
                 <div class='lane'>{html.escape(j.role_lane)} <span>{j.lane_confidence}% lane confidence</span></div>
                 <div class='meta'><span>{html.escape(j.location or 'Location not listed')}</span><span>{html.escape(j.workplace or '')}</span><span>{html.escape(as_text(j.employment_type) or '')}</span>{comp}{duplicate}</div>
                 <div class='grid'><div><strong>Why it matches</strong><ul>{reasons}</ul></div>{risk_block}</div>
+                {req_detail}
                 <details><summary>Why these scores?</summary><div class='details-grid'><div><strong>Fit evidence</strong><ul>{breakdown}</ul></div><div><strong>Priority evidence</strong><ul>{pri}</ul></div></div></details>
                 <a class='apply' href='{html.escape(j.apply_url or j.job_url)}' target='_blank' rel='noopener'>Open application →</a>
               </div>
@@ -302,6 +329,17 @@ def run_once(paths: RuntimePaths, *, open_dashboard: bool = False, quiet: bool =
     if not paths.config.exists():
         raise FileNotFoundError(f"Missing {paths.config}. Copy config.example.json to config.json first.")
     config = load_json(paths.config, {})
+    # Personal experience remains a local file in the runtime home, never GitHub.
+    evidence_path = paths.home / "candidate_evidence.json"
+    if evidence_path.exists():
+        try:
+            evidence = json.loads(evidence_path.read_text(encoding="utf-8-sig"))
+        except (ValueError, OSError) as exc:
+            raise ValueError(f"Invalid local candidate evidence file: {exc}") from exc
+        evidence_errors = validate_candidate_evidence(evidence)
+        if evidence_errors:
+            raise ValueError("Invalid local candidate evidence: " + "; ".join(evidence_errors))
+        config["_candidate_evidence"] = evidence
     state = load_json(paths.state, {"version": __version__, "jobs": {}, "boards": {}})
     cache = load_json(paths.cache, {})
     state["version"] = __version__
