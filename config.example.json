@@ -1,5 +1,6 @@
 {
   "alert_threshold": 82,
+  "min_alert_fit_score": 75,
   "dashboard_threshold": 52,
   "max_alert_age_hours": 24,
   "dashboard_age_hours": 168,
