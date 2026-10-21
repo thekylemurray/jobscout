@@ -83,7 +83,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
 
     with paths.eligible_csv.open("w", newline="", encoding="utf-8") as f:
         fields = [
-            "priority_score", "fit_score", "company", "title", "location", "workplace",
+            "priority_score", "fit_score", "company", "title", "source", "location", "workplace",
             "employment_type", "freshness", "age_hours", "published_at", "publication_basis", "first_seen_at", "updated_at", "availability", "availability_note", "availability_checked_at",
             "compensation", "role_lane", "lane_confidence", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on"
         ]
@@ -95,6 +95,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "fit_score": j.fit_score,
                 "company": j.company,
                 "title": j.title,
+                "source": j.source,
                 "location": j.location,
                 "workplace": j.workplace,
                 "employment_type": j.employment_type,
@@ -119,7 +120,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
 
     with paths.jobs_csv.open("w", newline="", encoding="utf-8") as f:
         fields = [
-            "priority_score", "fit_score", "company", "title", "location", "workplace",
+            "priority_score", "fit_score", "company", "title", "source", "location", "workplace",
             "employment_type", "freshness", "age_hours", "published_at", "publication_basis", "first_seen_at", "updated_at", "availability", "availability_note", "availability_checked_at",
             "compensation", "role_lane", "lane_confidence", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on"
         ]
@@ -131,6 +132,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "fit_score": j.fit_score,
                 "company": j.company,
                 "title": j.title,
+                "source": j.source,
                 "location": j.location,
                 "workplace": j.workplace,
                 "employment_type": j.employment_type,
@@ -171,6 +173,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
             w.writerow({
                 "company": j.company,
                 "title": j.title,
+                "source": j.source,
                 "location": j.location,
                 "source": j.source,
                 "veto_reason": j.veto_reason,
@@ -185,6 +188,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
             w.writerow({
                 "company": j.company,
                 "title": j.title,
+                "source": j.source,
                 "location": j.location,
                 "source": j.source,
                 "veto_reason": j.veto_reason,

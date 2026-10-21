@@ -10,7 +10,7 @@ from jobscout.paths import RuntimePaths
 from jobscout.scoring import apply_freshness
 from jobscout.trust import observe_requisition, requisition_key
 from jobscout.utils import iso_now
-from jobscout.verification import check_application
+from jobscout.verification import check_application, select_verification_candidates
 
 
 def posting(**kwargs):
@@ -146,3 +146,131 @@ def test_alert_requires_verified_job_and_fresh_employer_date(config, tmp_path):
     assert write_outputs([active], [], config, unknown_state, paths) == []
     other = replace(active, uid="new-greenhouse-2", history_key=active.history_key)
     assert write_outputs([other], [], config, unknown_state, paths) == []
+
+
+def test_verification_prioritizes_employer_sources_and_fit(config):
+    config["verification_max_per_scan"] = 12
+    config["dashboard_threshold"] = 52
+    direct = [posting(uid=f"gh-{n}", source="greenhouse",
+                      fit_score=75, priority_score=80, fresh=False)
+              for n in range(20)]
+    aggregator = [posting(uid=f"agg-{n}", source="himalayas",
+                          fit_score=90, priority_score=99, fresh=False)
+                  for n in range(20)]
+    unrelated = [posting(uid="engineering", source="greenhouse",
+                         fit_score=48, priority_score=63, fresh=True)]
+    checked = select_verification_candidates(aggregator + direct + unrelated, config)
+    assert len(checked) == 12
+    assert sum(j.source == "greenhouse" for j in checked) == 12
+    assert sum(j.source == "himalayas" for j in checked) == 0
+    assert unrelated[0] not in checked
+
+
+def test_verification_fills_unused_employer_quota(config):
+    config["verification_max_per_scan"] = 8
+    config["dashboard_threshold"] = 52
+    direct = [posting(uid=f"direct-{n}", source="greenhouse",
+                      fit_score=70, priority_score=75) for n in range(2)]
+    aggregator = [posting(uid=f"agg-{n}", source="himalayas",
+                          fit_score=80, priority_score=90) for n in range(20)]
+    checked = select_verification_candidates(aggregator + direct, config)
+    assert len(checked) == 8
+    assert sum(j.source == "greenhouse" for j in checked) == 2
+
+
+def test_greenhouse_uses_employer_api_before_html(monkeypatch):
+    calls = []
+    def respond(request, **kwargs):
+        calls.append(request.full_url)
+        assert request.full_url == "https://boards-api.greenhouse.io/v1/boards/example/jobs/12345?content=true"
+        return Response(json.dumps({
+            "id": 12345, "title": "Web Manager",
+            "absolute_url": "https://job-boards.greenhouse.io/example/jobs/12345"
+        }), request.full_url)
+    monkeypatch.setattr("urllib.request.urlopen", respond)
+    j = posting(uid="greenhouse:example:12345", source="greenhouse",
+                job_url="https://job-boards.greenhouse.io/example/jobs/12345",
+                apply_url="https://job-boards.greenhouse.io/example/jobs/12345")
+    assert check_application(j).availability == "Available"
+    assert len(calls) == 1
+    assert "Greenhouse API" in j.availability_note
+
+
+def test_smartrecruiters_uses_employer_api_before_html(monkeypatch):
+    calls = []
+    api = "https://api.smartrecruiters.com/v1/companies/Example/postings/abc123"
+    def respond(request, **kwargs):
+        calls.append(request.full_url)
+        assert request.full_url == api
+        return Response(json.dumps({
+            "id": "abc123", "name": "Web Manager",
+            "applyUrl": "https://jobs.smartrecruiters.com/Example/abc123"
+        }), api)
+    monkeypatch.setattr("urllib.request.urlopen", respond)
+    j = posting(uid="smartrecruiters:Example:abc123", source="smartrecruiters",
+                job_url="https://jobs.smartrecruiters.com/Example/abc123",
+                apply_url="https://jobs.smartrecruiters.com/Example/abc123")
+    assert check_application(j).availability == "Available"
+    assert calls == [api]
+
+
+def test_api_mismatch_falls_back_without_false_positive(monkeypatch):
+    api = "https://boards-api.greenhouse.io/v1/boards/example/jobs/12345?content=true"
+    original = "https://job-boards.greenhouse.io/example/jobs/12345"
+    def respond(request, **kwargs):
+        if request.full_url == api:
+            return Response(json.dumps({"id": 99999, "title": "Web Manager",
+                      "absolute_url": original}), api)
+        return Response("<h1>Careers</h1><p>Apply now for our open positions.</p>", original)
+    monkeypatch.setattr("urllib.request.urlopen", respond)
+    j = posting(uid="greenhouse:example:12345", source="greenhouse",
+                job_url=original, apply_url=original)
+    assert check_application(j).availability == "Unverified"
+
+
+def test_structured_api_error_does_not_automatically_close(monkeypatch):
+    api = "https://boards-api.greenhouse.io/v1/boards/example/jobs/12345?content=true"
+    original = "https://job-boards.greenhouse.io/example/jobs/12345"
+    def respond(request, **kwargs):
+        if request.full_url == api:
+            raise urllib.error.HTTPError(api, 404, "Not found", None, None)
+        return Response("<h1>Careers</h1>", original)
+    monkeypatch.setattr("urllib.request.urlopen", respond)
+    j = posting(uid="greenhouse:example:12345", source="greenhouse",
+                job_url=original, apply_url=original)
+    assert check_application(j).availability == "Unverified"
+
+
+def test_aggregator_only_links_do_not_consume_verification_requests(config):
+    config["verification_max_per_scan"] = 40
+    direct = [posting(uid=f"direct-{n}", source="greenhouse",
+                      fit_score=80, priority_score=82) for n in range(10)]
+    aggregator = [posting(uid=f"agg-{n}", source="himalayas",
+                          job_url=f"https://himalayas.app/jobs/{n}",
+                          apply_url=f"https://himalayas.app/jobs/{n}",
+                          fit_score=96, priority_score=99) for n in range(70)]
+    selected = select_verification_candidates(aggregator + direct, config)
+    assert len(selected) == 10
+    assert all(j.source == "greenhouse" for j in selected)
+
+
+def test_external_employer_link_from_aggregator_is_reviewed(config):
+    config["verification_max_per_scan"] = 40
+    j = posting(source="himalayas", job_url="https://himalayas.app/jobs/123",
+                apply_url="https://job-boards.greenhouse.io/acme/jobs/123",
+                fit_score=85, priority_score=90)
+    assert select_verification_candidates([j], config) == [j]
+
+
+def test_csv_reports_source_for_verification_audit(config, tmp_path):
+    config.update(dashboard_threshold=0, alert_threshold=100)
+    paths = RuntimePaths.from_home(tmp_path)
+    paths.ensure()
+    j = posting(uid="test-gh-1", source="greenhouse",
+                fit_score=85, priority_score=85, availability="Unverified")
+    write_outputs([j], [], config, {"jobs": {}}, paths)
+    import csv
+    with paths.eligible_csv.open(newline="", encoding="utf-8") as file:
+        rows = list(csv.DictReader(file))
+    assert "source" in rows[0]
+    assert rows[0]["source"] == "greenhouse"
