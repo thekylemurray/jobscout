@@ -10,6 +10,7 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 
 from .http import UA
+from .rules import DIRECT_SOURCES
 from .utils import iso_now, strip_html
 
 CLOSED = re.compile(
@@ -154,10 +155,36 @@ def check_application(job, timeout: int = 8):
     return job
 
 
+def select_verification_candidates(jobs, config: dict):
+    """Spend HTTP checks on plausible roles and primarily employer-hosted pages.
+
+    Employer ATS posts are more often verifiable than aggregator summaries.
+    Reserve 75 percent of the available checks for direct sources when possible,
+    without hiding fresh aggregator discoveries from manual review.
+    """
+    max_checks = max(0, min(int(config.get("verification_max_per_scan", 40)), 100))
+    min_fit = float(config.get("dashboard_threshold", 52))
+    eligible = [j for j in jobs if j.eligible and j.fit_score >= min_fit]
+    ranking = lambda j: (j.fresh, j.priority_score, j.fit_score)
+    direct = sorted((j for j in eligible if j.source in DIRECT_SOURCES),
+                    key=ranking, reverse=True)
+    other = sorted((j for j in eligible if j.source not in DIRECT_SOURCES),
+                   key=ranking, reverse=True)
+    direct_first = direct[:int(max_checks * 0.75)]
+    remaining = max_checks - len(direct_first)
+    selected = direct_first + other[:remaining]
+    remaining = max_checks - len(selected)
+    if remaining:
+        selected += direct[len(direct_first):len(direct_first) + remaining]
+    return selected
+
+
 def verify_shortlist(jobs, config: dict, log: list[str]):
     """Check the strongest matches in parallel without slowing every feed query."""
-    max_checks = max(0, min(int(config.get("verification_max_per_scan", 40)), 100))
-    candidates = sorted(jobs, key=lambda job: (job.fresh, job.priority_score, job.fit_score), reverse=True)[:max_checks]
+    candidates = select_verification_candidates(jobs, config)
+    log.append(f"APPLICATION_CHECK_SCOPE {len(candidates)} checked / "
+               f"{sum(j.source in DIRECT_SOURCES for j in candidates)} employer-hosted / "
+               f"{len(candidates) - sum(j.source in DIRECT_SOURCES for j in candidates)} others")
     with ThreadPoolExecutor(max_workers=4) as pool:
         list(pool.map(check_application, candidates))
     retained, closed = [], []
