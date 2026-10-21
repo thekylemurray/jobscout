@@ -173,12 +173,22 @@ def extract_sections(description: str) -> dict[str, str]:
         for term in terms:
             for m in _term_pattern(term).finditer(text):
                 marks.append((m.start(), m.end(), label))
-    marks.sort(key=lambda x: x[0])
+    # Select longest heading first at each position, then suppress nested hits:
+    # "Qualifications" inside "Preferred Qualifications" must not flip the
+    # latter into the required section.
+    marks.sort(key=lambda x: (x[0], -(x[1] - x[0])))
+    headings: list[tuple[int, int, str]] = []
+    last_end = -1
+    for st, en, label in marks:
+        if st < last_end:
+            continue
+        headings.append((st, en, label))
+        last_end = en
     out = {"required": "", "preferred": "", "responsibilities": "", "general": text}
-    for i, (st, en, label) in enumerate(marks):
-        nxt = marks[i + 1][0] if i + 1 < len(marks) else len(text)
+    for i, (st, en, label) in enumerate(headings):
+        nxt = headings[i + 1][0] if i + 1 < len(headings) else len(text)
         chunk = text[en:nxt].strip(" :-–—")
-        if len(chunk) >= 20:
+        if len(chunk) >= 1:
             out[label] += (" " + chunk)
     return out
 
