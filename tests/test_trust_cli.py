@@ -176,3 +176,66 @@ def test_verification_fills_unused_employer_quota(config):
     checked = select_verification_candidates(aggregator + direct, config)
     assert len(checked) == 8
     assert sum(j.source == "greenhouse" for j in checked) == 2
+
+
+def test_greenhouse_uses_employer_api_before_html(monkeypatch):
+    calls = []
+    def respond(request, **kwargs):
+        calls.append(request.full_url)
+        assert request.full_url == "https://boards-api.greenhouse.io/v1/boards/example/jobs/12345?content=true"
+        return Response(json.dumps({
+            "id": 12345, "title": "Web Manager",
+            "absolute_url": "https://job-boards.greenhouse.io/example/jobs/12345"
+        }), request.full_url)
+    monkeypatch.setattr("urllib.request.urlopen", respond)
+    j = posting(uid="greenhouse:example:12345", source="greenhouse",
+                job_url="https://job-boards.greenhouse.io/example/jobs/12345",
+                apply_url="https://job-boards.greenhouse.io/example/jobs/12345")
+    assert check_application(j).availability == "Available"
+    assert len(calls) == 1
+    assert "Greenhouse API" in j.availability_note
+
+
+def test_smartrecruiters_uses_employer_api_before_html(monkeypatch):
+    calls = []
+    api = "https://api.smartrecruiters.com/v1/companies/Example/postings/abc123"
+    def respond(request, **kwargs):
+        calls.append(request.full_url)
+        assert request.full_url == api
+        return Response(json.dumps({
+            "id": "abc123", "name": "Web Manager",
+            "applyUrl": "https://jobs.smartrecruiters.com/Example/abc123"
+        }), api)
+    monkeypatch.setattr("urllib.request.urlopen", respond)
+    j = posting(uid="smartrecruiters:Example:abc123", source="smartrecruiters",
+                job_url="https://jobs.smartrecruiters.com/Example/abc123",
+                apply_url="https://jobs.smartrecruiters.com/Example/abc123")
+    assert check_application(j).availability == "Available"
+    assert calls == [api]
+
+
+def test_api_mismatch_falls_back_without_false_positive(monkeypatch):
+    api = "https://boards-api.greenhouse.io/v1/boards/example/jobs/12345?content=true"
+    original = "https://job-boards.greenhouse.io/example/jobs/12345"
+    def respond(request, **kwargs):
+        if request.full_url == api:
+            return Response(json.dumps({"id": 99999, "title": "Web Manager",
+                      "absolute_url": original}), api)
+        return Response("<h1>Careers</h1><p>Apply now for our open positions.</p>", original)
+    monkeypatch.setattr("urllib.request.urlopen", respond)
+    j = posting(uid="greenhouse:example:12345", source="greenhouse",
+                job_url=original, apply_url=original)
+    assert check_application(j).availability == "Unverified"
+
+
+def test_structured_api_error_does_not_automatically_close(monkeypatch):
+    api = "https://boards-api.greenhouse.io/v1/boards/example/jobs/12345?content=true"
+    original = "https://job-boards.greenhouse.io/example/jobs/12345"
+    def respond(request, **kwargs):
+        if request.full_url == api:
+            raise urllib.error.HTTPError(api, 404, "Not found", None, None)
+        return Response("<h1>Careers</h1>", original)
+    monkeypatch.setattr("urllib.request.urlopen", respond)
+    j = posting(uid="greenhouse:example:12345", source="greenhouse",
+                job_url=original, apply_url=original)
+    assert check_application(j).availability == "Unverified"
