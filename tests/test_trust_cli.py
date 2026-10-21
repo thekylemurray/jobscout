@@ -10,7 +10,7 @@ from jobscout.paths import RuntimePaths
 from jobscout.scoring import apply_freshness
 from jobscout.trust import observe_requisition, requisition_key
 from jobscout.utils import iso_now
-from jobscout.verification import check_application
+from jobscout.verification import check_application, select_verification_candidates
 
 
 def posting(**kwargs):
@@ -146,3 +146,33 @@ def test_alert_requires_verified_job_and_fresh_employer_date(config, tmp_path):
     assert write_outputs([active], [], config, unknown_state, paths) == []
     other = replace(active, uid="new-greenhouse-2", history_key=active.history_key)
     assert write_outputs([other], [], config, unknown_state, paths) == []
+
+
+def test_verification_prioritizes_employer_sources_and_fit(config):
+    config["verification_max_per_scan"] = 12
+    config["dashboard_threshold"] = 52
+    direct = [posting(uid=f"gh-{n}", source="greenhouse",
+                      fit_score=75, priority_score=80, fresh=False)
+              for n in range(20)]
+    aggregator = [posting(uid=f"agg-{n}", source="himalayas",
+                          fit_score=90, priority_score=99, fresh=False)
+                  for n in range(20)]
+    unrelated = [posting(uid="engineering", source="greenhouse",
+                         fit_score=48, priority_score=63, fresh=True)]
+    checked = select_verification_candidates(aggregator + direct + unrelated, config)
+    assert len(checked) == 12
+    assert sum(j.source == "greenhouse" for j in checked) == 9
+    assert sum(j.source == "himalayas" for j in checked) == 3
+    assert unrelated[0] not in checked
+
+
+def test_verification_fills_unused_employer_quota(config):
+    config["verification_max_per_scan"] = 8
+    config["dashboard_threshold"] = 52
+    direct = [posting(uid=f"direct-{n}", source="greenhouse",
+                      fit_score=70, priority_score=75) for n in range(2)]
+    aggregator = [posting(uid=f"agg-{n}", source="himalayas",
+                          fit_score=80, priority_score=90) for n in range(20)]
+    checked = select_verification_candidates(aggregator + direct, config)
+    assert len(checked) == 8
+    assert sum(j.source == "greenhouse" for j in checked) == 2
