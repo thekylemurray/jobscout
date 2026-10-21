@@ -83,6 +83,66 @@ def _workday_endpoint(url: str) -> str | None:
     return f"{uri.scheme}://{uri.netloc}/wday/cxs/{tenant}/{site}/{tail}"
 
 
+def _structured_ats_endpoint(job):
+    """Identify the exact public ATS detail URL from a normalized source ID."""
+    source = job.source
+    if source not in {"greenhouse", "smartrecruiters"}:
+        return None
+    parts = (job.uid or "").split(":")
+    if len(parts) < 3 or parts[0] != source:
+        return None
+    board = ":".join(parts[1:-1])
+    job_id = parts[-1]
+    if not board or not job_id:
+        return None
+    if not re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", board):
+        return None
+    if not re.fullmatch(r"[A-Za-z0-9_-]{1,100}", job_id):
+        return None
+    quoted_board = urllib.parse.quote(board, safe="")
+    quoted_id = urllib.parse.quote(job_id, safe="")
+    if source == "greenhouse":
+        return (f"https://boards-api.greenhouse.io/v1/boards/{quoted_board}/jobs/{quoted_id}"
+                "?content=true")
+    return (f"https://api.smartrecruiters.com/v1/companies/{quoted_board}/postings/{quoted_id}")
+
+
+def _structured_ats_check(job, timeout: int):
+    """Return positive exact-ID evidence or None when public data is inconclusive.
+
+    A missing/blocked API record falls back to the actual application page;
+    a 404 from an API alone is not sufficient proof that hiring closed.
+    """
+    endpoint = _structured_ats_endpoint(job)
+    if not endpoint:
+        return None
+    try:
+        req = urllib.request.Request(endpoint, headers={"User-Agent": UA, "Accept": "application/json"})
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            data = json.loads(response.read(1_000_000).decode("utf-8", errors="replace"))
+        if not isinstance(data, dict):
+            return None
+        if job.source == "greenhouse":
+            actual_id = str(data.get("id", ""))
+            actual_title = data.get("title") or ""
+            apply_url = data.get("absolute_url") or ""
+            expected_id = (job.uid or "").split(":")[-1]
+            if (actual_id == expected_id and _norm(actual_title) == _norm(job.title)
+                    and _safe_public_url(apply_url)):
+                return ("Available", "Matching requisition and employer application URL confirmed by Greenhouse API.")
+        elif job.source == "smartrecruiters":
+            actual_id = str(data.get("id", ""))
+            actual_title = data.get("name") or ""
+            expected_id = (job.uid or "").split(":")[-1]
+            apply_url = data.get("applyUrl") or data.get("postingUrl") or ""
+            if (actual_id == expected_id and _norm(actual_title) == _norm(job.title)
+                    and _safe_public_url(apply_url)):
+                return ("Available", "Matching requisition and application URL confirmed by SmartRecruiters API.")
+    except (urllib.error.URLError, OSError, ValueError, TypeError, json.JSONDecodeError):
+        return None
+    return None
+
+
 def check_application(job, timeout: int = 8):
     """Return Available, Closed or Unverified; do not infer closure from 403/429."""
     job.availability = "Unverified"
@@ -105,6 +165,10 @@ def check_application(job, timeout: int = 8):
             employer_application = True
     if not _safe_public_url(original):
         job.availability_note = "No safe, valid posting URL."
+        return job
+    structured = _structured_ats_check(job, timeout)
+    if structured is not None:
+        job.availability, job.availability_note = structured
         return job
     endpoint = _workday_endpoint(original)
     requested = endpoint or original
