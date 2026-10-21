@@ -260,3 +260,17 @@ def test_external_employer_link_from_aggregator_is_reviewed(config):
                 apply_url="https://job-boards.greenhouse.io/acme/jobs/123",
                 fit_score=85, priority_score=90)
     assert select_verification_candidates([j], config) == [j]
+
+
+def test_csv_reports_source_for_verification_audit(config, tmp_path):
+    config.update(dashboard_threshold=0, alert_threshold=100)
+    paths = RuntimePaths.from_home(tmp_path)
+    paths.ensure()
+    j = posting(uid="test-gh-1", source="greenhouse",
+                fit_score=85, priority_score=85, availability="Unverified")
+    write_outputs([j], [], config, {"jobs": {}}, paths)
+    import csv
+    with paths.eligible_csv.open(newline="", encoding="utf-8") as file:
+        rows = list(csv.DictReader(file))
+    assert "source" in rows[0]
+    assert rows[0]["source"] == "greenhouse"
