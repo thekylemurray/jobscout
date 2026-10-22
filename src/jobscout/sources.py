@@ -517,6 +517,7 @@ def jobicy_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any]
             job_url=url,
             apply_url=url,
             published_at=j.get("pubDate"),
+            publication_basis="feed_updated_timestamp" if j.get("pubDate") else "",
             first_seen_at=first_seen,
             compensation=comp,
         ))
@@ -524,7 +525,13 @@ def jobicy_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any]
 
 def himalayas_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any] | None = None) -> list[Job]:
     """Keyword-focused recent US remote roles from Himalayas' public search API."""
-    queries = ["web", "website", "seo", "content", "digital experience", "cms", "geo", "aeo"]
+    # Preserve broad terms while searching niche web-operations/CMS titles that
+    # otherwise get crowded off the first two pages of broad query results.
+    queries = [
+        "web", "website", "seo", "content", "digital experience", "cms",
+        "aeo", "geo", "web producer", "website manager", "technical seo",
+        "content operations", "sitecore", "generative engine optimization",
+    ]
     dedup: dict[str, dict[str, Any]] = {}
 
     for q in queries:
