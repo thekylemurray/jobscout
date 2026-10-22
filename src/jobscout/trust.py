@@ -64,6 +64,10 @@ def observe_requisition(job: Job, state: dict, checked_at: str | None = None) ->
     old_uid = legacy.get(job.uid)
     is_new = prior is None and old_uid is None
     rec = rows.setdefault(key, {})
+    # Earlier versions mistakenly treated Himalayas pubDate as original
+    # publication. Provider documentation specifies that it is last updated.
+    if job.source == "himalayas" and rec.get("publication_basis") == "feed_timestamp":
+        rec["publication_basis"] = "feed_updated_timestamp"
     previous_first = rec.get("first_seen_at") or (old_uid or {}).get("first_seen_at")
     job.first_seen_at = previous_first or job.first_seen_at or when
     rec["first_seen_at"] = job.first_seen_at
