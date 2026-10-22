@@ -9,6 +9,7 @@ from .utils import canonical_company, iso_now, parse_dt
 
 FEED_SOURCES = frozenset({"remoteok", "jobicy", "himalayas", "wwr", "startupjobs"})
 CONFIDENCE = {"unknown": 0, "first_seen": 0, "relative_estimate": 1,
+              "feed_updated_timestamp": 1,
               "feed_timestamp": 2, "employer_timestamp": 3}
 
 
