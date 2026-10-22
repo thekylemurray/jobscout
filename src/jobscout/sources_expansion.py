@@ -102,7 +102,10 @@ def recruitee_jobs(company: str, board: str, first_seen: str,
     raw = request_xml(f"https://{account}.recruitee.com/api/feeds/offers.xml")
     root = ET.fromstring(raw)
     if root.tag != "jobs":
-        raise ValueError("Unexpected Recruitee XML feed structure")
+        raise ValueError(
+            f"Unexpected Recruitee XML feed structure: root={root.tag!r}, "
+            f"children={[n.tag for n in list(root)[:4]]!r}"
+        )
 
     out: list[Job] = []
     for offer in root.findall("job"):
