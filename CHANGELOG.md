@@ -1,5 +1,17 @@
 # Changelog
 
+## 2.1.0 — Personal CLI requirement-confidence refinement
+
+- Added candidate-oriented qualification sections without declaring them hard requirements.
+- Introduced explicit evidence-confidence levels and mandatory qualification-review warnings, independent of fit scores.
+- Kept unassessed experience distinct from verified skills gaps; unresolved high-scoring matches are routed to manual review instead of automatic Apply Now alerts.
+- Expanded CSV and HTML reporting with confidence and qualification-review reasons.
+- Added an offline synthetic 32-role benchmark with precision@5, recall and review/exclusion checks.
+- Extended automated test coverage to Python 3.14 to match personal Windows installations.
+- Continued compatibility with existing config.json, candidate_evidence.json, scan/watch, and state history.
+
+
+
 ## 1.0.0 — Portfolio release
 
 - Converted the prototype into an installable `src/` Python package with a cross-platform CLI.
