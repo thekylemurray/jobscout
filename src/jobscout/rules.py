@@ -207,11 +207,23 @@ AGGREGATOR_SOURCES = {"remoteok", "jobicy", "himalayas", "wwr"}
 
 REQUIRED_HEADINGS = [
     "minimum qualifications", "required qualifications", "requirements", "what you'll need",
-    "what you’ll need", "what you bring", "must have", "basic qualifications", "qualifications"
+    "what you’ll need", "must have", "must-have skills", "required skills",
+    "essential qualifications", "minimum requirements", "minimum experience",
+    "required experience", "basic requirements", "basic qualifications", "qualifications"
 ]
+# Candidate-oriented sections are relevant evidence, but not automatically
+# mandatory. Do not silently relabel "About You" as Required Qualifications.
+CANDIDATE_HEADINGS = [
+    "what you bring", "what you’ll bring", "what you'll bring", "who you are",
+    "about you", "your background", "what we're looking for",
+    "what we’re looking for", "what we're looking for in you",
+    "skills and experience", "your experience", "you bring to the table",
+]
+
 PREFERRED_HEADINGS = [
-    "preferred qualifications", "preferred experience", "nice to have", "nice-to-have",
-    "bonus points", "ideally", "preferred"
+    "preferred qualifications", "preferred experience", "preferred skills",
+    "nice to have", "nice-to-have", "bonus points", "bonus points if",
+    "ideally", "preferred"
 ]
 RESPONSIBILITY_HEADINGS = [
     "responsibilities", "what you'll do", "what you’ll do", "what you will do", "the role",
