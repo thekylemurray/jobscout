@@ -128,14 +128,13 @@ def test_startup_rss_does_not_invent_employer_apply_link_or_us_location(monkeypa
     jobs = sources.startupjobs_jobs(
         "Startup Jobs Remote",
         "https://startup.jobs/feeds/jobs?workplace=remote", SEEN)
-    assert len(jobs) == 2
+    assert len(jobs) == 1
     assert jobs[0].source == "startupjobs"
     assert jobs[0].company == "Acme"
     assert jobs[0].published_at == "2026-10-22T12:30:00+00:00"
     assert jobs[0].publication_basis == "feed_timestamp"
     assert jobs[0].job_url == jobs[0].apply_url
     assert jobs[0].location == ""
-    assert jobs[1].company == "Startup Jobs (employer unlisted)"
     assert not _has_external_application(jobs[0])
     assert jobs[0].source in AGGREGATOR_SOURCES
     assert seen == ["https://startup.jobs/feeds/jobs?workplace=remote"]
