@@ -734,7 +734,12 @@ def stripe_careers_jobs(company: str, board: str, first_seen: str, cache: dict[s
     return out
 
 
+from .sources_expansion import workable_jobs, recruitee_jobs, startupjobs_jobs
+
 SOURCE_FUNCS = {
+    "workable": workable_jobs,
+    "recruitee": recruitee_jobs,
+    "startupjobs": startupjobs_jobs,
     "ashby": ashby_jobs,
     "greenhouse": greenhouse_jobs,
     "lever": lever_jobs,
