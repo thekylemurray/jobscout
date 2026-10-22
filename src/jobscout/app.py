@@ -88,7 +88,8 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
             "priority_score", "fit_score", "company", "title", "source", "location", "workplace",
             "employment_type", "freshness", "age_hours", "published_at", "publication_basis", "first_seen_at", "updated_at", "availability", "availability_note", "availability_checked_at",
             "compensation", "role_lane", "lane_confidence", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on",
-            "requirement_coverage", "required_gaps", "scope_flags", "requirement_evidence"
+            "requirement_coverage", "required_gaps", "scope_flags", "requirement_evidence",
+            "assessment_confidence", "qualification_review_required", "qualification_review_reasons"
         ]
         w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
@@ -119,6 +120,9 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "risks": "; ".join(j.risks or []),
                 "priority_reasons": "; ".join(j.priority_reasons or []),
                 "also_found_on": "; ".join(j.also_found_on or []),
+                "assessment_confidence": j.assessment_confidence,
+                "qualification_review_required": j.qualification_review_required,
+                "qualification_review_reasons": "; ".join(j.qualification_review_reasons or []),
                 "requirement_coverage": j.requirement_coverage,
                 "required_gaps": "; ".join(j.requirement_gaps or []),
                 "scope_flags": "; ".join(j.scope_flags or []),
@@ -133,7 +137,8 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
             "priority_score", "fit_score", "company", "title", "source", "location", "workplace",
             "employment_type", "freshness", "age_hours", "published_at", "publication_basis", "first_seen_at", "updated_at", "availability", "availability_note", "availability_checked_at",
             "compensation", "role_lane", "lane_confidence", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on",
-            "requirement_coverage", "required_gaps", "scope_flags", "requirement_evidence"
+            "requirement_coverage", "required_gaps", "scope_flags", "requirement_evidence",
+            "assessment_confidence", "qualification_review_required", "qualification_review_reasons"
         ]
         w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
@@ -164,6 +169,9 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "risks": "; ".join(j.risks or []),
                 "priority_reasons": "; ".join(j.priority_reasons or []),
                 "also_found_on": "; ".join(j.also_found_on or []),
+                "assessment_confidence": j.assessment_confidence,
+                "qualification_review_required": j.qualification_review_required,
+                "qualification_review_reasons": "; ".join(j.qualification_review_reasons or []),
                 "requirement_coverage": j.requirement_coverage,
                 "required_gaps": "; ".join(j.requirement_gaps or []),
                 "scope_flags": "; ".join(j.scope_flags or []),
@@ -227,6 +235,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
         is_new_enough = j.fresh and first_age is not None and 0 <= first_age <= max_age
         if (j.priority_score >= alert_threshold
                 and j.fit_score >= config.get("min_alert_fit_score", 75)
+                and not j.qualification_review_required
                 and is_new_enough and j.availability == "Available"
                 and not rec.get("alerted", False) and not history.get("alerted", False)):
             alerts.append(j)
@@ -243,7 +252,8 @@ def render_html(jobs: list[Job]) -> str:
     tier_order = ["🔥 Apply now", "🟢 Strong matches", "🟡 Worth reviewing", "🔵 Discovery"]
     buckets: dict[str, list[Job]] = {t: [] for t in tier_order}
     for j in jobs:
-        tier = (application_tier(j) if j.availability == "Available" else
+        tier = (application_tier(j) if (j.availability == "Available"
+                and not j.qualification_review_required) else
                 ("🟡 Worth reviewing" if j.priority_score >= 58 else "🔵 Discovery"))
         buckets[tier].append(j)
 
@@ -264,9 +274,13 @@ def render_html(jobs: list[Job]) -> str:
                 "<li>" + html.escape(x["importance"] + ": " + x["requirement"] +
                                      " — " + x["assessment"]) + "</li>"
                 for x in (j.requirements or []))
-            req_detail = ("<details><summary>Requirement evidence</summary><p>" +
-                          html.escape(j.requirement_coverage) + "</p><ul>" + req_items +
-                          "</ul></details>") if j.requirements else ""
+            review_reasons = "; ".join(j.qualification_review_reasons or [])
+            review_text = ("<div class='risks'><strong>Qualification review required:</strong> " +
+                           html.escape(review_reasons) + "</div>") if review_reasons else ""
+            req_detail = ("<details><summary>Requirement evidence — " +
+                          html.escape(j.assessment_confidence) + " assessment confidence</summary><p>" +
+                          html.escape(j.requirement_coverage or "No recognized requirement categories") +
+                          "</p><ul>" + req_items + "</ul></details>")
             comp = f"<span>{html.escape(j.compensation)}</span>" if j.compensation else ""
             duplicate = f"<span>also: {html.escape(', '.join(j.also_found_on or []))}</span>" if j.also_found_on else ""
             cards.append(f"""
@@ -280,6 +294,7 @@ def render_html(jobs: list[Job]) -> str:
                 <div class='lane'>{html.escape(j.role_lane)} <span>{j.lane_confidence}% lane confidence</span></div>
                 <div class='meta'><span>{html.escape(j.location or 'Location not listed')}</span><span>{html.escape(j.workplace or '')}</span><span>{html.escape(as_text(j.employment_type) or '')}</span>{comp}{duplicate}</div>
                 <div class='grid'><div><strong>Why it matches</strong><ul>{reasons}</ul></div>{risk_block}</div>
+                {review_text}
                 {req_detail}
                 <details><summary>Why these scores?</summary><div class='details-grid'><div><strong>Fit evidence</strong><ul>{breakdown}</ul></div><div><strong>Priority evidence</strong><ul>{pri}</ul></div></div></details>
                 <a class='apply' href='{html.escape(j.apply_url or j.job_url)}' target='_blank' rel='noopener'>Open application →</a>
