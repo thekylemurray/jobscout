@@ -209,3 +209,29 @@ def test_workable_multilocation_us_and_foreign_preserved(monkeypatch):
     job = sources.workable_jobs("Example", "example", SEEN)[0]
     assert "United Kingdom" in job.location
     assert "Raleigh, NC, US" in job.location
+
+
+def test_existing_himalayas_history_is_reclassified_as_update_not_posted(config):
+    from jobscout.models import Job
+    from jobscout.trust import observe_requisition, requisition_key
+    from jobscout.scoring import apply_freshness, freshness_label
+
+    old = "2026-10-22T12:00:00Z"
+    j = Job(uid="himalayas:ABC", company="Acme", source="himalayas",
+            title="Senior SEO Specialist", location="United States", workplace="Remote",
+            employment_type="Full Time", description="Technical SEO",
+            job_url="https://himalayas.app/companies/acme/jobs/senior-seo",
+            apply_url="https://himalayas.app/companies/acme/jobs/senior-seo",
+            published_at=old, first_seen_at=old, compensation="",
+            publication_basis="feed_updated_timestamp")
+    key = requisition_key(j)
+    state = {"jobs": {}, "requisitions": {
+        key: {"first_seen_at": old, "first_published_at": old,
+              "publication_basis": "feed_timestamp", "alerted": False}}}
+    observe_requisition(j, state, checked_at=old)
+    assert j.publication_basis == "feed_updated_timestamp"
+    assert state["requisitions"][key]["publication_basis"] == "feed_updated_timestamp"
+    apply_freshness(j, config, board_initialized=True, is_new=False)
+    assert not j.fresh
+    assert freshness_label(j) == "FEED UPDATED"
+    assert not any("posted today +" in p for p in (j.priority_reasons or []))
