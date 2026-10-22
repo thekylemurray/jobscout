@@ -517,7 +517,6 @@ def jobicy_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any]
             job_url=url,
             apply_url=url,
             published_at=j.get("pubDate"),
-            publication_basis="feed_updated_timestamp" if j.get("pubDate") else "",
             first_seen_at=first_seen,
             compensation=comp,
         ))
@@ -579,6 +578,7 @@ def himalayas_jobs(company: str, board: str, first_seen: str, cache: dict[str, A
             job_url=j.get("url", "") or j.get("applicationLink", "") or "",
             apply_url=j.get("applicationLink", "") or j.get("url", "") or "",
             published_at=j.get("pubDate"),
+            publication_basis="feed_updated_timestamp" if j.get("pubDate") else "",
             first_seen_at=first_seen,
             compensation=comp,
         ))
