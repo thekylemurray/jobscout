@@ -201,9 +201,9 @@ ROLE_LANES = [
 
 DIRECT_SOURCES = {
     "greenhouse", "ashby", "lever", "smartrecruiters", "workday", "icims",
-    "stripe_direct", "stripe_careers"
+    "stripe_direct", "stripe_careers", "workable", "recruitee"
 }
-AGGREGATOR_SOURCES = {"remoteok", "jobicy", "himalayas", "wwr"}
+AGGREGATOR_SOURCES = {"remoteok", "jobicy", "himalayas", "wwr", "startupjobs"}
 
 REQUIRED_HEADINGS = [
     "minimum qualifications", "required qualifications", "requirements", "what you'll need",
