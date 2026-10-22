@@ -104,7 +104,8 @@ def recruitee_jobs(company: str, board: str, first_seen: str,
     if root.tag != "jobs":
         raise ValueError(
             f"Unexpected Recruitee XML feed structure: root={root.tag!r}, "
-            f"children={[n.tag for n in list(root)[:4]]!r}"
+            f"children={[n.tag for n in list(root)[:4]]!r}; "
+            f"first_fields={[n.tag for n in list(root[0])[:35]]!r}"
         )
 
     out: list[Job] = []
