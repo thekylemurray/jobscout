@@ -101,34 +101,40 @@ def recruitee_jobs(company: str, board: str, first_seen: str,
     account = _account(board)
     raw = request_xml(f"https://{account}.recruitee.com/api/feeds/offers.xml")
     root = ET.fromstring(raw)
-    if root.tag != "jobs":
-        raise ValueError(
-            f"Unexpected Recruitee XML feed structure: root={root.tag!r}, "
-            f"children={[n.tag for n in list(root)[:4]]!r}; "
-            f"first_fields={[n.tag for n in list(root[0])[:35]]!r}"
-        )
+    if root.tag == "jobs":
+        offers = root.findall("job")  # Documented formatted job-board feed
+    elif root.tag == "offers":
+        offers = root.findall("offer")  # Observed live public feed envelope
+    else:
+        raise ValueError(f"Unexpected Recruitee XML feed root: {root.tag!r}")
 
     out: list[Job] = []
-    for offer in root.findall("job"):
-        req_id = _xml_text(offer, "reference")
-        title = _xml_text(offer, "title")
-        job_url = _xml_text(offer, "url")
-        apply_url = _xml_text(offer, "apply_url") or job_url
+    for offer in offers:
+        def value(*names: str) -> str:
+            return next((_xml_text(offer, name) for name in names
+                         if _xml_text(offer, name)), "")
+
+        req_id = value("reference", "id")
+        title = value("title")
+        job_url = value("url", "careers_url")
+        apply_url = value("apply_url", "careers_apply_url") or job_url
         if not title or not req_id or not job_url.startswith(("https://", "http://")):
             continue
         locations: list[str] = []
         for node in offer.findall("./locations/location"):
-            parts = [_xml_text(node, key) for key in ("city", "state", "country")]
+            parts = [_xml_text(node, key) for key in
+                     ("city", "state", "state_code", "country", "country_code")]
             label = ", ".join(p for p in parts if p)
             if label and label not in locations:
                 locations.append(label)
         if not locations:
-            parts = [_xml_text(offer, key) for key in ("city", "state", "country")]
+            parts = [value("city"), value("state", "state_code"),
+                     value("country", "country_code")]
             location = ", ".join(p for p in parts if p)
             if location:
                 locations.append(location)
-        remote = _xml_text(offer, "remote").lower() == "true"
-        hybrid = _xml_text(offer, "hybrid").lower() == "true"
+        remote = value("remote").lower() == "true"
+        hybrid = value("hybrid").lower() == "true"
         loc = " | ".join(locations)
         if remote:
             loc = f"Remote - {loc}" if loc else "Remote"
@@ -136,25 +142,31 @@ def recruitee_jobs(company: str, board: str, first_seen: str,
         salary = offer.find("salary")
         compensation = ""
         if salary is not None:
-            low = _xml_text(salary, "min_salary")
-            high = _xml_text(salary, "max_salary")
-            currency = _xml_text(salary, "currency")
-            period = _xml_text(salary, "period")
+            def salary_value(*names: str) -> str:
+                return next((_xml_text(salary, name) for name in names
+                             if _xml_text(salary, name)), "")
+            low = salary_value("min_salary", "min")
+            high = salary_value("max_salary", "max")
+            currency = salary_value("currency")
+            period = salary_value("period")
             if low or high:
                 compensation = f"{currency} {low}-{high} {period}".strip()
-        pub = _xml_text(offer, "posted")
+        pub = value("posted", "published_at")
+        description = " ".join(x for x in [
+            value("description_requirements"),
+            value("description"), value("requirements")] if x)
         out.append(Job(
             uid=f"recruitee:{account}:{req_id}",
-            company=_xml_text(offer, "company") or company,
+            company=value("company", "company_name") or company,
             source="recruitee",
             title=title,
             location=loc,
             workplace=workplace,
-            employment_type=_xml_text(offer, "contract_type"),
-            description=strip_html(_xml_text(offer, "description_requirements")),
+            employment_type=value("contract_type", "employment_type_code"),
+            description=strip_html(description),
             job_url=job_url, apply_url=apply_url,
             published_at=pub or None,
-            updated_at=_xml_text(offer, "updated") or None,
+            updated_at=value("updated", "updated_at") or None,
             first_seen_at=first_seen,
             compensation=compensation,
             publication_basis="employer_timestamp" if pub else "",
