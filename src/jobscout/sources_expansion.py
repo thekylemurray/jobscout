@@ -48,6 +48,20 @@ def workable_jobs(company: str, board: str, first_seen: str,
             continue
         location = ", ".join(str(row.get(key)).strip()
                              for key in ("city", "state", "country") if row.get(key))
+        locations: list[str] = []
+        if location:
+            locations.append(location)
+        for extra in (row.get("locations") or []):
+            if isinstance(extra, dict):
+                label = ", ".join(as_text(extra.get(k)).strip()
+                                  for k in ("city", "state", "country") if extra.get(k))
+            elif isinstance(extra, str):
+                label = extra.strip()
+            else:
+                label = ""
+            if label and label not in locations:
+                locations.append(label)
+        location = " | ".join(locations)
         workplace = as_text(row.get("workplace_type", "")).strip().title()
         remote = row.get("telecommuting") is True or workplace.lower() == "remote"
         if remote:
@@ -172,6 +186,10 @@ def startupjobs_jobs(company: str, board: str, first_seen: str,
             maybe_company, maybe_title = raw_title.split(": ", 1)
             if maybe_company and maybe_title:
                 employer, title = maybe_company.strip(), maybe_title.strip()
+        elif " at " in raw_title:
+            maybe_title, maybe_company = raw_title.rsplit(" at ", 1)
+            if maybe_title and maybe_company:
+                employer, title = maybe_company.strip(), maybe_title.strip()
         description = strip_html(_xml_text(item, "description"))
         published = None
         date_text = _xml_text(item, "pubDate")
@@ -181,7 +199,7 @@ def startupjobs_jobs(company: str, board: str, first_seen: str,
             except (TypeError, ValueError, OverflowError):
                 pass
         # No U.S. restriction is inferred merely because the remote filter matched.
-        location = _xml_text(item, "location") or _xml_text(item, "region") or "Location not specified"
+        location = _xml_text(item, "location") or _xml_text(item, "region")
         out.append(Job(
             uid=f"startupjobs:{guid}",
             company=employer or "Startup Jobs (employer unlisted)",
