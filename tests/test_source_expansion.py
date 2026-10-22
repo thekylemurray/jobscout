@@ -235,3 +235,29 @@ def test_existing_himalayas_history_is_reclassified_as_update_not_posted(config)
     assert not j.fresh
     assert freshness_label(j) == "FEED UPDATED"
     assert not any("posted today +" in p for p in (j.priority_reasons or []))
+
+
+def test_live_recruitee_offers_envelope_and_fields(monkeypatch):
+    xml = """<offers><offer>
+      <id>52781</id><slug>digital-web-manager</slug><title>Digital Web Manager</title>
+      <description><![CDATA[<p>Own web content and SEO</p>]]></description>
+      <requirements><![CDATA[<p>Sitecore, accessibility and CMS migrations</p>]]></requirements>
+      <city>Raleigh</city><country>United States</country>
+      <remote>true</remote><hybrid>false</hybrid>
+      <company_name>US Example</company_name><employment_type_code>full-time</employment_type_code>
+      <careers_url>https://example.recruitee.com/o/digital-web-manager</careers_url>
+      <apply_url>https://example.recruitee.com/o/digital-web-manager/c/new</apply_url>
+      <published_at>2026-10-21 11:00:00 UTC</published_at>
+      <updated_at>2026-10-22 18:00:00 UTC</updated_at>
+    </offer></offers>"""
+    monkeypatch.setattr(adapters, "request_xml", lambda _: xml.encode())
+    jobs = sources.recruitee_jobs("Example", "example", SEEN)
+    assert len(jobs) == 1
+    job = jobs[0]
+    assert job.uid == "recruitee:example:52781"
+    assert job.company == "US Example"
+    assert "Sitecore" in job.description
+    assert job.location.startswith("Remote - Raleigh")
+    assert job.published_at == "2026-10-21 11:00:00 UTC"
+    assert job.apply_url.endswith("/c/new")
+    assert job.publication_basis == "employer_timestamp"
