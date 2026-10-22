@@ -114,3 +114,43 @@ def test_doctor_rejects_conflicting_private_evidence(tmp_path, config, capsys):
         encoding="utf-8")
     assert _doctor(paths) == 1
     assert "FAIL candidate evidence" in capsys.readouterr().out
+
+
+def test_phase2_1_high_fit_needs_manual_review_before_alert_or_apply_now(tmp_path, config):
+    paths = RuntimePaths.from_home(tmp_path)
+    paths.ensure()
+    config.update(alert_threshold=82, min_alert_fit_score=75, dashboard_threshold=52)
+    role = candidate(title="Senior Website Manager", fit_score=96, priority_score=98,
+                     availability="Available", fresh=True,
+                     discovery_status="published",
+                     assessment_confidence="Low", qualification_review_required=True,
+                     qualification_review_reasons=["High fit score but no explicit required skills identified"])
+    state = {"jobs": {}, "requisitions": {}}
+    alerts = app.write_outputs([role], [], config, state, paths)
+    assert alerts == []
+    page = paths.dashboard.read_text(encoding="utf-8")
+    assert "Qualification review required" in page
+    assert "Low assessment confidence" in page
+    assert "Worth reviewing" in page
+    assert "Apply now" not in page
+    import csv
+    with paths.eligible_csv.open(encoding="utf-8", newline="") as handle:
+        row = next(csv.DictReader(handle))
+    assert row["assessment_confidence"] == "Low"
+    assert row["qualification_review_required"] == "True"
+    assert "explicit required skills" in row["qualification_review_reasons"]
+
+
+def test_phase2_1_clear_required_skills_still_allow_verified_alert(tmp_path, config):
+    paths = RuntimePaths.from_home(tmp_path)
+    paths.ensure()
+    config.update(alert_threshold=82, min_alert_fit_score=75)
+    role = candidate(title="Senior Web Producer", fit_score=90, priority_score=95,
+                     availability="Available", fresh=True,
+                     discovery_status="published",
+                     assessment_confidence="High", qualification_review_required=False,
+                     qualification_review_reasons=[])
+    state = {"jobs": {}, "requisitions": {}}
+    alerts = app.write_outputs([role], [], config, state, paths)
+    assert len(alerts) == 1
+    assert len(app.write_outputs([role], [], config, state, paths)) == 0
