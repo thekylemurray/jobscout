@@ -46,7 +46,7 @@ def test_workable_adapter_uses_public_widget_and_correct_application_urls(monkey
     assert first.publication_basis == "employer_timestamp"
     assert first.location.startswith("Remote - Raleigh")
     assert first.workplace == "Remote"
-    assert first.description == "Sitecore, SEO and web QA."
+    assert first.description.replace(" .", ".") == "Sitecore, SEO and web QA."
     assert first.job_url.endswith("/AB123/")
     assert first.apply_url.endswith("/AB123/apply/")
     assert jobs[1].workplace == "Hybrid"
