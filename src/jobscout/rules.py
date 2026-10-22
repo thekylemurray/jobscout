@@ -209,6 +209,7 @@ REQUIRED_HEADINGS = [
     "minimum qualifications", "required qualifications", "requirements", "what you'll need",
     "what you’ll need", "must have", "must-have skills", "required skills",
     "essential qualifications", "minimum requirements", "minimum experience",
+    "required:", "required skills:",
     "required experience", "basic requirements", "basic qualifications", "qualifications"
 ]
 # Candidate-oriented sections are relevant evidence, but not automatically
