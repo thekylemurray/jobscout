@@ -219,7 +219,7 @@ def check_application(job, timeout: int = 8):
     return job
 
 
-AGGREGATOR_SOURCES = frozenset({"remoteok", "jobicy", "himalayas", "wwr"})
+AGGREGATOR_SOURCES = frozenset({"remoteok", "jobicy", "himalayas", "wwr", "startupjobs"})
 AGGREGATOR_HOSTS = ("remoteok.com", "jobicy.com", "himalayas.app",
                     "weworkremotely.com", "startup.jobs")
 
