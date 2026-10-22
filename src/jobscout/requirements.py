@@ -64,9 +64,10 @@ PATTERNS: dict[str, tuple[str, ...]] = {
     "seo platforms": (r"\b(?:semrush|ahrefs|conductor|screaming frog)\b",),
 }
 
-_SECTIONS = ("required", "responsibilities", "preferred", "general")
-_IMPORTANCE = {"required": "Required", "responsibilities": "Responsibility",
-               "preferred": "Preferred", "general": "Mentioned"}
+_SECTIONS = ("required", "candidate", "responsibilities", "preferred", "general")
+_IMPORTANCE = {"required": "Required", "candidate": "Candidate criteria",
+               "responsibilities": "Responsibility", "preferred": "Preferred",
+               "general": "Mentioned"}
 _STATUS = {"demonstrated": "Demonstrated", "transferable": "Transferable",
            "not_demonstrated": "Not demonstrated", "unassessed": "Unassessed"}
 
