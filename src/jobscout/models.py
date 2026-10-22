@@ -37,3 +37,7 @@ class Job:
     availability: str = "Unverified"
     availability_note: str = "Posting has not been checked."
     availability_checked_at: str = ""
+    requirements: list[dict[str, str]] | None = None
+    requirement_coverage: str = ""
+    requirement_gaps: list[str] | None = None
+    scope_flags: list[str] | None = None

@@ -69,6 +69,11 @@ def validate_config(config: dict[str, Any]) -> list[str]:
         if key in config and not isinstance(config[key], (int, float)):
             errors.append(f"config.{key} must be numeric")
 
+    if "min_alert_fit_score" in config:
+        v = config["min_alert_fit_score"]
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not 0 <= v <= 100:
+            errors.append("config.min_alert_fit_score must be between 0 and 100")
+
     for idx, board in enumerate(config.get("boards", [])):
         if not isinstance(board, dict):
             errors.append(f"boards[{idx}] must be an object")

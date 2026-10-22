@@ -33,3 +33,20 @@ def test_digital_web_services_precedence(config):
     score_job(job, config)
     assert job.eligible
     assert job.role_lane == "Web / CMS / Digital Experience"
+
+
+def test_remote_in_the_us_is_allowed_for_explicit_web_role(config):
+    role = make_job("AEO and GEO Marketing Manager",
+                    "Required: technical SEO, generative engine optimization, CMS, web analytics and internal linking",
+                    location="Remote in the US", source="greenhouse")
+    score_job(role, config)
+    assert role.eligible
+    assert role.veto_reason == ""
+
+
+def test_remote_in_other_country_is_not_automatically_us_eligible(config):
+    role = make_job("Web Manager",
+                    "Required: CMS content strategy, analytics, technical SEO, publishing workflows",
+                    location="Remote in the UK", source="greenhouse")
+    score_job(role, config)
+    assert not role.eligible

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .models import Job
+from .requirements import assess_requirements, role_scope
 from .trust import publication_basis
 from .rules import (
     ADJACENT_OWNERSHIP_SIGNALS, AGGREGATOR_SOURCES, CORE_GROUPS, DIRECT_SOURCES,
@@ -31,6 +33,14 @@ def title_veto(title: str) -> str:
     if has_any(t, ["web designer", "visual designer", "product designer", "brand designer",
                    "motion designer", "graphic designer"]) or has_term(t, "designer"):
         return "occupation outside target lane: design specialist"
+
+    # A website/SEO term is not sufficient to rescue a full-stack/software engineer.
+    if (re.search(r"\b(?:full[ -]?stack|back[ -]?end|front[ -]?end)\s+"
+                  r"(?:software\s+)?(?:engineer|developer)\b", t, re.I)
+            or has_any(t, ["software engineer", "software developer", "application developer"])):
+        return "occupation outside target lane: software engineering"
+    if re.search(r"\b(?:unpaid|internship|intern)\b", t, re.I):
+        return "internship or unpaid role outside target seniority"
 
     if has_any(t, RESCUE_TITLE_TERMS, contextual=True):
         return ""
@@ -254,13 +264,35 @@ def score_job(job: Job, config: dict[str, Any]) -> Job:
         risks.append("generic title; verify role ownership")
         breakdown.append("generic-title cap 76")
 
+    # Requirement evidence stays separate from raw keyword relevance. Only user-
+    # asserted not-demonstrated skills create skill penalties. Unassessed != missing.
+    findings, coverage, gaps, evidence_adjustment = assess_requirements(
+        description, config.get("_candidate_evidence"))
+    job.requirements = findings
+    job.requirement_coverage = coverage
+    job.requirement_gaps = gaps
+    score += evidence_adjustment
+    if evidence_adjustment:
+        breakdown.append(f"candidate evidence {evidence_adjustment:+d}")
+    if gaps:
+        risks.append("required skills explicitly not demonstrated: " + ", ".join(gaps[:3]))
+
+    scope_cap, scope_flags = role_scope(title, findings)
+    job.scope_flags = scope_flags
+    if scope_flags:
+        risks.extend(scope_flags)
+    if scope_cap is not None:
+        score = min(score, scope_cap)
+        breakdown.append(f"role scope cap {scope_cap}")
+
     # Avoid fake 100% certainty from keyword density. A 96 is deliberately reserved
     # for an unusually complete match; most strong jobs should land in the 70s/80s.
     score = max(0, min(96, round(score)))
     job.fit_score = int(score)
     job.reasons = list(dict.fromkeys(reasons))[:8]
-    job.risks = list(dict.fromkeys(risks))[:6]
-    job.score_breakdown = breakdown[:14]
+    # Surface occupational blockers before less important adjacent-specialty notes.
+    job.risks = list(dict.fromkeys(scope_flags + risks))[:8]
+    job.score_breakdown = (breakdown[:11] + breakdown[-3:] if len(breakdown) > 14 else breakdown)
     return job
 
 def apply_freshness(job: Job, config: dict[str, Any], *, board_initialized: bool, is_new: bool) -> Job:

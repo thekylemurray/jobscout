@@ -222,7 +222,8 @@ TOO_SENIOR_TERMS = ["vice president", "vp", "chief marketing officer", "chief di
 
 REMOTE_US_MARKERS = [
     "remote - united states", "remote, united states", "remote united states",
-    "remote in united states", "remote - us", "remote, us", "remote us", "us remote",
+    "remote in united states", "remote in the us", "remote in the u.s.",
+    "remote - us", "remote, us", "remote us", "us remote",
     "united states (remote)", "usa remote", "remote usa", "remote-friendly"
 ]
 FOREIGN_MARKERS = [
