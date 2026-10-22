@@ -373,6 +373,15 @@ def run_once(paths: RuntimePaths, *, open_dashboard: bool = False, quiet: bool =
     except OSError:
         dashboard_count = 0
     log.append(f"ELIGIBLE {len(jobs)} / DASHBOARD {dashboard_count} / REJECTED {len(rejected)}")
+    confidence_counts = Counter(j.assessment_confidence for j in jobs)
+    review_count = sum(j.qualification_review_required for j in jobs)
+    review_high_fit = sum(j.qualification_review_required and j.fit_score >= 80 for j in jobs)
+    log.append("ASSESSMENT_CONFIDENCE " +
+               " / ".join(f"{level} {confidence_counts.get(level, 0)}"
+                          for level in ("High", "Medium", "Low")))
+    log.append(f"QUALIFICATION_REVIEW {review_count} of {len(jobs)} eligible / "
+               f"{review_high_fit} scoring 80+")
+
     ok_sources = sum(1 for line in log if line.startswith("OK "))
     failed_sources = sum(1 for line in log if line.startswith("FAIL "))
     log.append(f"SOURCE_HEALTH OK {ok_sources} / FAIL {failed_sources}")
