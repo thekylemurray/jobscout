@@ -134,7 +134,7 @@ def test_startup_rss_does_not_invent_employer_apply_link_or_us_location(monkeypa
     assert jobs[0].published_at == "2026-10-22T12:30:00+00:00"
     assert jobs[0].publication_basis == "feed_timestamp"
     assert jobs[0].job_url == jobs[0].apply_url
-    assert jobs[0].location == "Location not specified"
+    assert jobs[0].location == ""
     assert jobs[1].company == "Startup Jobs (employer unlisted)"
     assert not _has_external_application(jobs[0])
     assert jobs[0].source in AGGREGATOR_SOURCES
@@ -186,3 +186,27 @@ def test_add_sources_cli_backs_up_config_and_does_not_touch_state(config, tmp_pa
     assert paths.state.read_text() == original_state
     assert _add_sources(paths) == 0
     assert len(list(tmp_path.glob("config.backup-*.json"))) == 1
+
+
+def test_startup_rss_recovers_employer_from_title_at_company(monkeypatch):
+    rss = ("""<rss><channel><item><title>Website Manager at Example Co</title>"""
+           """<link>https://startup.jobs/website-manager-example-123</link>"""
+           """<description>Sitecore and SEO</description>"""
+           """</item></channel></rss>""")
+    monkeypatch.setattr(adapters, "request_xml", lambda _: rss.encode())
+    jobs = sources.startupjobs_jobs("Startup Jobs", "https://startup.jobs/feeds/jobs", SEEN)
+    assert len(jobs) == 1
+    assert jobs[0].company == "Example Co"
+    assert jobs[0].title == "Website Manager"
+
+
+def test_workable_multilocation_us_and_foreign_preserved(monkeypatch):
+    payload = {"jobs": [{"shortcode": "a12", "title": "Web Producer",
+            "city": "London", "country": "United Kingdom", "telecommuting": True,
+            "locations": [{"city": "Raleigh", "state": "NC", "country": "US"}],
+            "url": "https://apply.workable.com/a/j/a12/",
+            "published_on": "2026-10-22T15:00:00Z"}]}
+    monkeypatch.setattr(adapters, "request_json", lambda _: payload)
+    job = sources.workable_jobs("Example", "example", SEEN)[0]
+    assert "United Kingdom" in job.location
+    assert "Raleigh, NC, US" in job.location
