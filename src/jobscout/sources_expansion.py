@@ -190,6 +190,10 @@ def startupjobs_jobs(company: str, board: str, first_seen: str,
             maybe_title, maybe_company = raw_title.rsplit(" at ", 1)
             if maybe_title and maybe_company:
                 employer, title = maybe_company.strip(), maybe_title.strip()
+        # An unknown employer would collapse unrelated jobs into one company
+        # during cross-source deduplication. Skip rather than invent provenance.
+        if not employer:
+            continue
         description = strip_html(_xml_text(item, "description"))
         published = None
         date_text = _xml_text(item, "pubDate")
@@ -202,7 +206,7 @@ def startupjobs_jobs(company: str, board: str, first_seen: str,
         location = _xml_text(item, "location") or _xml_text(item, "region")
         out.append(Job(
             uid=f"startupjobs:{guid}",
-            company=employer or "Startup Jobs (employer unlisted)",
+            company=employer,
             source="startupjobs",
             title=title,
             location=location,
