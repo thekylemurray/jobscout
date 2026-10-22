@@ -53,3 +53,36 @@ Follow with:
 Review output/eligible_all.csv, output/rejected.csv and output/last_run.log. The same CSVs are regenerated every scan; local state and the job-history ledger are preserved.
 
 The bundled Python test suite includes requirement classification, role caps, pipeline integration, CSV exports and alert gating on Python 3.11–3.13. A live scan with your personal configuration is still required to establish behavior on current employer postings.
+
+## Version 2.1 — Assessment confidence and manual review
+
+A fit score is **relevance**, not a qualification guarantee. JobScout 2.1 now reports a separate assessment-confidence level based on how much *required-skill evidence* it could evaluate:
+
+- **High:** At least two recognized explicit Required categories, with at least 75% of them assessed as demonstrated, transferable, or explicitly not demonstrated.
+- **Medium:** Some explicit required categories are recognized, or at least two candidate-criteria categories are found without formal requirements.
+- **Low:** No explicit required categories, and too little candidate-criteria evidence to establish structured qualification coverage.
+
+This is **confidence in the completeness of extracted qualification evidence**, not a probability of being hired. High confidence can accompany a definite gap; low confidence does not imply unqualified. Job descriptions that say **Who You Are**, **About You**, or **What You Bring** now populate Candidate criteria rather than inventing mandatory requirements.
+
+**Manual qualification review** is flagged when any of these apply:
+1. Fit is 80+ but no explicit mandatory skill categories were recognized;
+2. Two or more explicitly required categories are still unassessed;
+3. At least one explicitly required category is declared not demonstrated by the local profile;
+4. Direct-report or personnel-management responsibilities are present without demonstrated personnel management;
+5. Leadership scope requires verification.
+
+Flagged jobs remain in the review dashboard and exported CSVs, even when they score highly. They are **never placed in Apply Now** or sent as automatic verified alerts until reviewed; the tool doesn't pretend to know the missing qualifications. Review does not automatically change a fit score.
+
+New report fields: `assessment_confidence`, `qualification_review_required`, and `qualification_review_reasons`. Existing `requirement_coverage`, `required_gaps` and evidence fields continue unchanged.
+
+### Repeatable offline benchmark
+
+On the JobScout source checkout, run:
+
+```powershell
+.\.venv\Scripts\python.exe -m jobscout.benchmark
+```
+
+The `benchmarks/phase2_1_cases.json` dataset contains 32 **synthetic, human-labeled fixture scenarios**, not full real job descriptions. The tool reports precision among review-ready top-five jobs, recall of labeled good matches, and rejection/review safeguard rates. CI runs the benchmark alongside unit tests. The dataset can be copied privately and relabeled for later testing against actual human-reviewed postings without committing application history.
+
+**Do not interpret precision@5 on synthetic fixtures as observed real-world recommendation accuracy.** A live run and review of postings from the user's search profile remains necessary. Real-world recall also requires manually labeling known relevant jobs that the tool found, plus a sample of excluded listings.
