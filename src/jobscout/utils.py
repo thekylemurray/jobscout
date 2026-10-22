@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .rules import (
-    COMPANY_ALIASES, PREFERRED_HEADINGS, REQUIRED_HEADINGS,
+    CANDIDATE_HEADINGS, COMPANY_ALIASES, PREFERRED_HEADINGS, REQUIRED_HEADINGS,
     RESPONSIBILITY_HEADINGS, ROLE_LANES,
 )
 
@@ -166,9 +166,14 @@ def extract_sections(description: str) -> dict[str, str]:
     """
     text = re.sub(r"\s+", " ", as_text(description)).strip()
     if not text:
-        return {"required": "", "preferred": "", "responsibilities": "", "general": ""}
+        return {"required": "", "candidate": "", "preferred": "", "responsibilities": "", "general": ""}
     marks: list[tuple[int, int, str]] = []
-    groups = [(REQUIRED_HEADINGS, "required"), (PREFERRED_HEADINGS, "preferred"), (RESPONSIBILITY_HEADINGS, "responsibilities")]
+    groups = [
+        (REQUIRED_HEADINGS, "required"),
+        (CANDIDATE_HEADINGS, "candidate"),
+        (PREFERRED_HEADINGS, "preferred"),
+        (RESPONSIBILITY_HEADINGS, "responsibilities"),
+    ]
     for terms, label in groups:
         for term in terms:
             for m in _term_pattern(term).finditer(text):
@@ -184,7 +189,7 @@ def extract_sections(description: str) -> dict[str, str]:
             continue
         headings.append((st, en, label))
         last_end = en
-    out = {"required": "", "preferred": "", "responsibilities": "", "general": text}
+    out = {"required": "", "candidate": "", "preferred": "", "responsibilities": "", "general": text}
     for i, (st, en, label) in enumerate(headings):
         nxt = headings[i + 1][0] if i + 1 < len(headings) else len(text)
         chunk = text[en:nxt].strip(" :-–—")

@@ -1,0 +1,162 @@
+[
+  {
+    "title": "Senior Web Producer",
+    "label": "good",
+    "description": "Required Qualifications: Sitecore, technical SEO, website QA, content governance, and CMS publishing. Responsibilities: Lead website operations, release workflows, content migration, stakeholder coordination, and website production."
+  },
+  {
+    "title": "Web Operations Manager",
+    "label": "good",
+    "description": "Required qualifications: Sitecore, CMS migration, web QA, SEO, analytics, content governance. Responsibilities: Own website operations and publishing workflows with marketing and engineering."
+  },
+  {
+    "title": "Senior Technical SEO Specialist",
+    "label": "good",
+    "description": "Minimum requirements: Technical SEO, SEO, Google Analytics, accessibility. Responsibilities: Manage organic search, Search Console, CMS publishing, structured content, website QA and content strategy."
+  },
+  {
+    "title": "AEO and GEO Marketing Manager",
+    "label": "good",
+    "description": "Required qualifications: technical SEO, AEO, generative engine optimization, Google Analytics. Responsibilities: Own AI search visibility, organic discovery, internal linking and structured content for B2B SaaS websites."
+  },
+  {
+    "title": "Senior Website Manager",
+    "label": "good",
+    "description": "Required qualifications: Sitecore, CMS migration, web QA, content governance, website publishing. Responsibilities: Own the enterprise website roadmap, releases, SEO, analytics and stakeholder coordination."
+  },
+  {
+    "title": "Digital Content Producer",
+    "label": "good",
+    "description": "Required: WordPress, website publishing, SEO, content governance, web QA. Responsibilities: Produce digital content, manage web operations and CMS migration, coordinate stakeholder launches."
+  },
+  {
+    "title": "Senior Web Content Manager",
+    "label": "good",
+    "description": "Required Qualifications: Sitecore, SEO, content governance and accessibility. Responsibilities: Manage website publishing, CMS migration, web analytics and release QA."
+  },
+  {
+    "title": "Content Systems Manager",
+    "label": "good",
+    "description": "Required qualifications: headless CMS, structured content, content governance, Sitecore. Responsibilities: Run content systems and CMS publishing, website migrations, quality assurance, and stakeholders."
+  },
+  {
+    "title": "Sitecore Migration Specialist",
+    "label": "good",
+    "description": "Required qualifications: Sitecore, CMS migration, UAT, web QA. Responsibilities: Audit enterprise content migration, validate redirects and website publishing, coordinate engineering and accessibility."
+  },
+  {
+    "title": "SEO/AEO Manager",
+    "label": "good",
+    "description": "Required: technical SEO, SEO, AEO, Google Analytics. Responsibilities: Build organic visibility, internal linking, AI search content strategy and web analytics for healthcare websites."
+  },
+  {
+    "title": "Web Strategy Manager",
+    "label": "good",
+    "description": "Required qualifications: SEO, analytics, Sitecore, content governance. Responsibilities: Own website strategy, web production and CMS publishing, website roadmap, and cross-functional operations."
+  },
+  {
+    "title": "Website Product Owner",
+    "label": "good",
+    "description": "Required qualifications: Sitecore, CMS publishing, web QA, stakeholder coordination. Responsibilities: Prioritize website roadmap, content governance, technical SEO and CMS migration."
+  },
+  {
+    "title": "Sr. Digital Experience Manager",
+    "label": "review",
+    "description": "Responsibilities: Own web experience, SEO, customer journeys, web analytics, CMS migration, web production and stakeholder coordination. Who You Are: Experienced with Figma, Sitecore and headless CMS. No explicit minimum qualifications listed."
+  },
+  {
+    "title": "Senior Growth Manager, Web Experience and CRO",
+    "label": "review",
+    "description": "Responsibilities: Lead web experience optimization, SEO, website operations, analytics, CMS migration, customer experimentation, and organic growth. About You: Strong understanding of websites and cross-functional work."
+  },
+  {
+    "title": "Senior SEO Manager and Account Manager",
+    "label": "review",
+    "description": "Required qualifications: technical SEO, SEO, Google Analytics, content governance. Responsibilities: Own key client accounts, client relationships, quarterly renewals and agency delivery."
+  },
+  {
+    "title": "Head of AEO and SEO",
+    "label": "review",
+    "description": "Required qualifications: SEO, technical SEO, AEO, analytics. Responsibilities: Run global SEO department and hiring, manage employees and strategy for web content."
+  },
+  {
+    "title": "Director of Web Operations",
+    "label": "review",
+    "description": "Required qualifications: Sitecore, CMS migration, SEO, web analytics. Responsibilities: Oversee enterprise website operations, budgets, stakeholder roadmap, direct reports and marketing organization."
+  },
+  {
+    "title": "Digital Marketing Manager, Paid Media",
+    "label": "review",
+    "description": "Required qualifications: paid media, HubSpot, marketing automation, Google Analytics. Responsibilities: Own paid campaigns and performance media budgets, landing page optimization and SEO."
+  },
+  {
+    "title": "Website Manager, Marketing Automation",
+    "label": "review",
+    "description": "Required qualifications: Sitecore, Salesforce Marketing Cloud, HubSpot, paid media. Responsibilities: Own website publishing, SEO, cross-functional content governance and marketing automation."
+  },
+  {
+    "title": "Senior Digital Experience Manager, Team Lead",
+    "label": "review",
+    "description": "Required qualifications: people management, direct reports, Sitecore and SEO. Responsibilities: Hire and supervise staff, run website operations and digital experience roadmap."
+  },
+  {
+    "title": "Brand and Marketing Operations Manager",
+    "label": "review",
+    "description": "Required qualifications: paid media, marketing automation, HubSpot, Salesforce Marketing Cloud. Responsibilities: Coordinate web experience, manage B2B creative agency and paid acquisitions."
+  },
+  {
+    "title": "Digital Experience Developer",
+    "label": "review",
+    "description": "Required qualifications: Sitecore, HTML and CSS, technical SEO. Responsibilities: Build production front end features, code with developers and manage website deployments."
+  },
+  {
+    "title": "Senior Full Stack Engineer, Website Development",
+    "label": "exclude",
+    "description": "Required qualifications: Sitecore, HTML and CSS, SEO. Responsibilities: Develop full stack software services, web platform engineering and API integrations."
+  },
+  {
+    "title": "Senior Software Engineer, Web Platform",
+    "label": "exclude",
+    "description": "Required qualifications: website operations, technical SEO, web analytics. Responsibilities: Build distributed software backend services and JavaScript web applications."
+  },
+  {
+    "title": "Front-end Developer — Web Experience",
+    "label": "exclude",
+    "description": "Required qualifications: SEO, CMS migration, web QA. Responsibilities: Production JavaScript and React development, unit testing and coding."
+  },
+  {
+    "title": "Backend Engineer, Content Platform",
+    "label": "exclude",
+    "description": "Required qualifications: contentful, structured content, Sitecore. Responsibilities: Implement backend services, APIs, Kubernetes and database engineering."
+  },
+  {
+    "title": "Senior Accountant",
+    "label": "exclude",
+    "description": "Required: financial reporting, audit and accounting. Responsibilities: Manage accounting close and taxation."
+  },
+  {
+    "title": "Account Executive, Digital Marketing",
+    "label": "exclude",
+    "description": "Required: sales experience and CRM. Responsibilities: Sell advertising services and grow assigned account territory."
+  },
+  {
+    "title": "Senior Customer Success Manager",
+    "label": "exclude",
+    "description": "Required: customer service and renewal expertise. Responsibilities: Renew accounts and manage customer relationships."
+  },
+  {
+    "title": "UX Product Designer",
+    "label": "exclude",
+    "description": "Required: Figma, interaction design, UX research. Responsibilities: Produce visual prototypes for websites and product design."
+  },
+  {
+    "title": "Website Content Writer Internship UNPAID",
+    "label": "exclude",
+    "description": "Required: WordPress, SEO, content strategy. Responsibilities: Unpaid part-time internship writing blog posts and learning digital marketing."
+  },
+  {
+    "title": "VP, Sales and Digital Marketing",
+    "label": "exclude",
+    "description": "Required: SEO, paid media, analytics. Responsibilities: Lead the revenue and sales department and paid digital acquisition."
+  }
+]

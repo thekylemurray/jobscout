@@ -101,6 +101,12 @@ output/
 
 Runtime files are ignored by Git.
 
+## Version 2.1 — qualification confidence and review safeguards
+
+Personal CLI 2.1 separates keyword-based fit from the completeness of requirement evidence. Listings with missing explicit requirements, multiple unassessed mandatory skills, confirmed required gaps, or personnel-management uncertainty are labeled **Qualification review required**, retained for review, and withheld from automatic **Apply now** alerts. The CSV now shows assessment confidence and the reason a candidate needs review.
+
+A repeatable offline 32-case synthetic benchmark and Python 3.14 CI checks are included. See [Phase 2.1 qualification confidence and benchmark](docs/REQUIREMENT_SCORING.md). **No private candidate profile is checked into GitHub.**
+
 ## Phase 2 — requirement-aware matching (personal CLI)
 
 The personal command-line edition now rejects software-engineering occupations even when their titles contain web terms, caps over-senior/agency-account-heavy roles, and separates **required** from **preferred** qualifications. A local-only optional candidate_evidence.json file lets you mark specific capabilities demonstrated, transferable or explicitly not demonstrated. Unassessed means *unknown*, not unqualified. Output CSVs and the dashboard explain gaps and occupational-scope warnings. See [Requirement-aware scoring](docs/REQUIREMENT_SCORING.md).

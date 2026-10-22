@@ -4,7 +4,7 @@ import re
 from typing import Any
 
 from .models import Job
-from .requirements import assess_requirements, role_scope
+from .requirements import assess_requirements, review_assessment, role_scope
 from .trust import publication_basis
 from .rules import (
     ADJACENT_OWNERSHIP_SIGNALS, AGGREGATOR_SOURCES, CORE_GROUPS, DIRECT_SOURCES,
@@ -289,6 +289,12 @@ def score_job(job: Job, config: dict[str, Any]) -> Job:
     # for an unusually complete match; most strong jobs should land in the 70s/80s.
     score = max(0, min(96, round(score)))
     job.fit_score = int(score)
+    quality, review_reasons = review_assessment(findings, job.fit_score, scope_flags)
+    job.assessment_confidence = quality
+    job.qualification_review_reasons = review_reasons
+    job.qualification_review_required = bool(review_reasons)
+    if review_reasons:
+        risks.extend(review_reasons[:3])
     job.reasons = list(dict.fromkeys(reasons))[:8]
     # Surface occupational blockers before less important adjacent-specialty notes.
     job.risks = list(dict.fromkeys(scope_flags + risks))[:8]
