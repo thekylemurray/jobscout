@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from scripts.benchmark_phase2_1 import evaluate, fixture_config
+from jobscout.benchmark import evaluate, fixture_config
 
 FIXTURE = Path(__file__).resolve().parents[1] / "benchmarks" / "phase2_1_cases.json"
 
