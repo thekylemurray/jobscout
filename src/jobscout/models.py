@@ -41,3 +41,6 @@ class Job:
     requirement_coverage: str = ""
     requirement_gaps: list[str] | None = None
     scope_flags: list[str] | None = None
+    assessment_confidence: str = "Not assessed"
+    qualification_review_reasons: list[str] | None = None
+    qualification_review_required: bool = False
