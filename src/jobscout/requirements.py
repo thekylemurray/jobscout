@@ -145,6 +145,47 @@ def assess_requirements(description: str, evidence: dict | None = None
     return findings, coverage, gaps, plus - minus
 
 
+
+def review_assessment(findings: list[dict[str, str]], fit_score: int,
+                      scope_flags: list[str] | None = None
+                      ) -> tuple[str, list[str]]:
+    """Rate completeness of qualification evidence, not likelihood of hiring.
+
+    Sparse descriptions and unknown required skills should trigger review,
+    not be misinterpreted as evidence the candidate is unqualified.
+    """
+    required = [item for item in findings if item["importance"] == "Required"]
+    candidate = [item for item in findings if item["importance"] == "Candidate criteria"]
+    known = [item for item in required if item["assessment"] in
+             {"Demonstrated", "Transferable", "Not demonstrated"}]
+    unknown = [item for item in required if item not in known]
+    gaps = [item for item in required if item["assessment"] == "Not demonstrated"]
+
+    if len(required) >= 2 and len(known) / len(required) >= 0.75:
+        confidence = "High"
+    elif required or len(candidate) >= 2:
+        confidence = "Medium"
+    else:
+        confidence = "Low"
+
+    reasons: list[str] = []
+    if not required and fit_score >= 80:
+        reasons.append("High fit score but no explicit required skills identified")
+    if len(unknown) >= 2:
+        reasons.append(f"{len(unknown)} required skill categories still unassessed")
+    if gaps:
+        reasons.append(f"{len(gaps)} required skill categories explicitly not demonstrated")
+    managers = [x for x in findings if x["requirement"] == "people management"
+                and x["importance"] in {"Required", "Candidate criteria", "Responsibility"}]
+    if managers and managers[0]["assessment"] != "Demonstrated":
+        reasons.append("Direct-report or personnel-management requirement needs review")
+    if any("leadership scope" in flag.lower() or "head-of-function" in flag.lower()
+           for flag in (scope_flags or [])):
+        reasons.append("Leadership scope requires qualification review")
+
+    return confidence, list(dict.fromkeys(reasons))
+
+
 def role_scope(title: str, requirements: list[dict[str, str]]) -> tuple[int | None, list[str]]:
     """Apply scope caps after keyword scoring, before any alert decision."""
     t = title.lower()
