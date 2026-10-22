@@ -50,4 +50,5 @@ def test_himalayas_adapter_preserves_numeric_publication_timestamp(monkeypatch):
 
     assert len(jobs) == 1
     assert jobs[0].published_at == 1788436800
+    assert jobs[0].publication_basis == "feed_updated_timestamp"
     assert jobs[0].compensation == "USD 100000-130000 annual"
