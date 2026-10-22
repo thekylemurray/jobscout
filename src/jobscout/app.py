@@ -60,7 +60,20 @@ def fetch_all(config: dict[str, Any], state: dict[str, Any], cache: dict[str, An
 
         board_state[board_key] = {"initialized": True, "last_checked_at": iso_now()}
 
-    return dedupe_jobs(jobs, config), rejected
+    unique = dedupe_jobs(jobs, config)
+    expansion_sources = {"workable", "recruitee", "startupjobs"}
+    raw_expansion = sum(j.source in expansion_sources for j in jobs)
+    primary_expansion = sum(j.source in expansion_sources for j in unique)
+    overlap_expansion = sum(
+        bool(expansion_sources.intersection(j.also_found_on or []))
+        for j in unique
+    )
+    log.append(
+        f"EXPANSION_COVERAGE raw_eligible {raw_expansion} / "
+        f"dedup_primary {primary_expansion} / "
+        f"overlap_with_existing {overlap_expansion}"
+    )
+    return unique, rejected
 
 def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], state: dict[str, Any], paths: RuntimePaths) -> list[Job]:
     paths.output_dir.mkdir(parents=True, exist_ok=True)

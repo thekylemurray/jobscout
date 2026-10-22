@@ -524,7 +524,13 @@ def jobicy_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any]
 
 def himalayas_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any] | None = None) -> list[Job]:
     """Keyword-focused recent US remote roles from Himalayas' public search API."""
-    queries = ["web", "website", "seo", "content", "digital experience", "cms", "geo", "aeo"]
+    # Preserve broad terms while searching niche web-operations/CMS titles that
+    # otherwise get crowded off the first two pages of broad query results.
+    queries = [
+        "web", "website", "seo", "content", "digital experience", "cms",
+        "aeo", "geo", "web producer", "website manager", "technical seo",
+        "content operations", "sitecore", "generative engine optimization",
+    ]
     dedup: dict[str, dict[str, Any]] = {}
 
     for q in queries:
@@ -572,6 +578,7 @@ def himalayas_jobs(company: str, board: str, first_seen: str, cache: dict[str, A
             job_url=j.get("url", "") or j.get("applicationLink", "") or "",
             apply_url=j.get("applicationLink", "") or j.get("url", "") or "",
             published_at=j.get("pubDate"),
+            publication_basis="feed_updated_timestamp" if j.get("pubDate") else "",
             first_seen_at=first_seen,
             compensation=comp,
         ))
@@ -734,7 +741,12 @@ def stripe_careers_jobs(company: str, board: str, first_seen: str, cache: dict[s
     return out
 
 
+from .sources_expansion import workable_jobs, recruitee_jobs, startupjobs_jobs
+
 SOURCE_FUNCS = {
+    "workable": workable_jobs,
+    "recruitee": recruitee_jobs,
+    "startupjobs": startupjobs_jobs,
     "ashby": ashby_jobs,
     "greenhouse": greenhouse_jobs,
     "lever": lever_jobs,

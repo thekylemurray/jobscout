@@ -151,9 +151,9 @@ def check_application(job, timeout: int = 8):
     original = job.job_url or job.apply_url
     # For aggregator discoveries, check the employer application if one exists.
     aggregator_hosts = ("remoteok.com", "jobicy.com", "himalayas.app",
-                        "weworkremotely.com")
+                        "weworkremotely.com", "startup.jobs")
     employer_application = False
-    if job.source in {"remoteok", "jobicy", "himalayas", "wwr"}:
+    if job.source in {"remoteok", "jobicy", "himalayas", "wwr", "startupjobs"}:
         application = job.apply_url or ""
         if _safe_public_url(application):
             host = (urllib.parse.urlsplit(application).hostname or "").lower()
@@ -219,9 +219,9 @@ def check_application(job, timeout: int = 8):
     return job
 
 
-AGGREGATOR_SOURCES = frozenset({"remoteok", "jobicy", "himalayas", "wwr"})
+AGGREGATOR_SOURCES = frozenset({"remoteok", "jobicy", "himalayas", "wwr", "startupjobs"})
 AGGREGATOR_HOSTS = ("remoteok.com", "jobicy.com", "himalayas.app",
-                    "weworkremotely.com")
+                    "weworkremotely.com", "startup.jobs")
 
 
 def _has_external_application(job) -> bool:

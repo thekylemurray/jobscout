@@ -23,7 +23,7 @@ The result is a small information-retrieval system with four distinct concerns:
 
 ## Highlights
 
-- **11 source adapters:** Greenhouse, Ashby, Lever, SmartRecruiters, Workday, iCIMS, Stripe Careers, Remote OK, Jobicy, Himalayas, and We Work Remotely.
+- **14 source adapters:** Greenhouse, Ashby, Lever, SmartRecruiters, Workday, iCIMS, Stripe Careers, Remote OK, Jobicy, Himalayas, and We Work Remotely.
 - **Two-stage ranking:** career-lane classification before fit scoring.
 - **Requirement-aware evidence:** Required Qualifications count more than Responsibilities, Preferred Qualifications, or general boilerplate.
 - **Context-aware acronyms:** suppresses common `GEO` and `CRO` false positives.

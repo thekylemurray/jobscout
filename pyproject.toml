@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "jobscout-local"
-version = "2.1.0"
+version = "2.2.0"
 description = "Explainable, local-first job discovery and ranking across public ATS feeds."
 readme = "README.md"
 requires-python = ">=3.11"

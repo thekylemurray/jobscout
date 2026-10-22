@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.2.0 — Personal CLI source expansion preview
+
+- Added no-token public Workable, Recruitee XML and Startup Jobs RSS adapters.
+- Added curated expansion boards with safe idempotent `jobscout add-sources` and automatic timestamped config backup.
+- Expanded focused Himalayas queries and corrected `pubDate` provenance to last-updated, not initial publication.
+- Added source-attribution and deduplication counters to the scan log.
+- Preserved Phase 2.1 scoring, personal profiles, history and alert-verification safeguards.
+
+
+
 ## 2.1.0 — Personal CLI requirement-confidence refinement
 
 - Added candidate-oriented qualification sections without declaring them hard requirements.
