@@ -219,15 +219,13 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
         if has_any(j.title or "", near_terms)
     ]
     with paths.near_miss_csv.open("w", newline="", encoding="utf-8") as f:
-        fields = ["company", "title", "location", "source", "veto_reason", "apply_url"]
+        fields = ["company", "title", "location", "source", "source_class", "veto_reason", "apply_url"]
         w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
         for j in near_misses:
             w.writerow({
                 "company": j.company,
                 "title": j.title,
-                "source": j.source,
-                "source_class": source_class(j),
                 "location": j.location,
                 "source": j.source,
                 "source_class": source_class(j),
@@ -236,15 +234,13 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
             })
 
     with paths.rejected_csv.open("w", newline="", encoding="utf-8") as f:
-        fields = ["company", "title", "location", "source", "veto_reason", "apply_url"]
+        fields = ["company", "title", "location", "source", "source_class", "veto_reason", "apply_url"]
         w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
         for j in rejected:
             w.writerow({
                 "company": j.company,
                 "title": j.title,
-                "source": j.source,
-                "source_class": source_class(j),
                 "location": j.location,
                 "source": j.source,
                 "source_class": source_class(j),
