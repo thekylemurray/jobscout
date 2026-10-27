@@ -69,6 +69,21 @@ def test_workable_exact_account_shortcode_title_and_application(monkeypatch):
     assert calls == [url]
 
 
+def test_workable_global_shortcode_urls_confirmed_by_account_feed(monkeypatch):
+    url = "https://apply.workable.com/api/v1/widget/accounts/example?details=true"
+    listing = {
+        "shortcode": "AB123", "title": "Website Manager",
+        "url": "https://apply.workable.com/j/AB123",
+        "application_url": "https://apply.workable.com/j/AB123/apply",
+    }
+    monkeypatch.setattr("urllib.request.urlopen",
+                        lambda req, **kw: Response({"jobs": [listing]}, url))
+    result = check_application(posting(
+        job_url="https://apply.workable.com/j/AB123",
+        apply_url="https://apply.workable.com/j/AB123/apply"))
+    assert result.availability == "Available"
+
+
 def test_workable_same_title_different_shortcode_is_not_verified(monkeypatch):
     api = "https://apply.workable.com/api/v1/widget/accounts/example?details=true"
     original = "https://apply.workable.com/example/j/AB123/"
