@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from .http import UA
 from .rules import DIRECT_SOURCES
+from .source_trust import is_intermediary
 from .utils import iso_now, strip_html
 
 CLOSED = re.compile(
@@ -86,7 +87,7 @@ def _workday_endpoint(url: str) -> str | None:
 def _structured_ats_endpoint(job):
     """Identify the exact public ATS detail URL from a normalized source ID."""
     source = job.source
-    if source not in {"greenhouse", "smartrecruiters"}:
+    if source not in {"greenhouse", "smartrecruiters", "workable"}:
         return None
     parts = (job.uid or "").split(":")
     if len(parts) < 3 or parts[0] != source:
@@ -104,6 +105,8 @@ def _structured_ats_endpoint(job):
     if source == "greenhouse":
         return (f"https://boards-api.greenhouse.io/v1/boards/{quoted_board}/jobs/{quoted_id}"
                 "?content=true")
+    if source == "workable":
+        return f"https://apply.workable.com/api/v1/widget/accounts/{quoted_board}?details=true"
     return (f"https://api.smartrecruiters.com/v1/companies/{quoted_board}/postings/{quoted_id}")
 
 
@@ -121,6 +124,32 @@ def _structured_ats_check(job, timeout: int):
         with urllib.request.urlopen(req, timeout=timeout) as response:
             data = json.loads(response.read(1_000_000).decode("utf-8", errors="replace"))
         if not isinstance(data, dict):
+            return None
+        if job.source == "workable":
+            expected = (job.uid or "").split(":")[-1]
+            account = (job.uid or "").split(":")[1].lower()
+            rows = data.get("jobs")
+            if not isinstance(rows, list):
+                return None
+            for listing in rows:
+                if not isinstance(listing, dict):
+                    continue
+                shortcode = str(listing.get("shortcode") or listing.get("code") or "")
+                if shortcode != expected or _norm(listing.get("title") or "") != _norm(job.title):
+                    continue
+                # Verify the application link is for this exact Workable account
+                # and job, rather than a generic or third-party careers page.
+                urls = [listing.get("url") or "", listing.get("application_url") or "",
+                        listing.get("shortlink") or ""]
+                for link in urls:
+                    if not _safe_public_url(link):
+                        continue
+                    parsed = urllib.parse.urlsplit(link)
+                    if (parsed.hostname == "apply.workable.com"
+                            and re.search(
+                                rf"^/{re.escape(account)}/j/{re.escape(expected)}(?:/|$)",
+                                parsed.path, re.I)):
+                        return ("Available", "Exact Workable requisition and application link confirmed by employer widget.")
             return None
         if job.source == "greenhouse":
             actual_id = str(data.get("id", ""))
@@ -148,6 +177,10 @@ def check_application(job, timeout: int = 8):
     job.availability = "Unverified"
     job.availability_checked_at = iso_now()
     job.availability_note = "Could not independently verify this exact application."
+    if is_intermediary(job):
+        job.availability_note = (
+            "Recruiting intermediary; client employer application not independently verified.")
+        return job
     original = job.job_url or job.apply_url
     # For aggregator discoveries, check the employer application if one exists.
     aggregator_hosts = ("remoteok.com", "jobicy.com", "himalayas.app",
@@ -245,10 +278,11 @@ def select_verification_candidates(jobs, config: dict):
     min_fit = float(config.get("dashboard_threshold", 52))
     eligible = [j for j in jobs if j.eligible and j.fit_score >= min_fit]
     ranking = lambda j: (j.fresh, j.priority_score, j.fit_score)
-    direct = sorted((j for j in eligible if j.source in DIRECT_SOURCES),
-                    key=ranking, reverse=True)
+    direct = sorted((j for j in eligible if j.source in DIRECT_SOURCES
+                     and not is_intermediary(j)), key=ranking, reverse=True)
     linked = sorted((j for j in eligible if j.source not in DIRECT_SOURCES
-                     and _has_external_application(j)), key=ranking, reverse=True)
+                     and not is_intermediary(j) and _has_external_application(j)),
+                    key=ranking, reverse=True)
     # Prefer employer-sourced records; never burn a check on aggregator-only URLs.
     return (direct + linked)[:max_checks]
 
@@ -264,7 +298,7 @@ def verify_shortlist(jobs, config: dict, log: list[str]):
     skipped = sum(j.source in AGGREGATOR_SOURCES and not _has_external_application(j)
                   for j in jobs)
     log.append(f"APPLICATION_CHECK_SCOPE {len(candidates)} requested / "
-               f"{sum(j.source in DIRECT_SOURCES for j in candidates)} employer-hosted / "
+               f"{sum(j.source in DIRECT_SOURCES and not is_intermediary(j) for j in candidates)} employer-hosted / "
                f"{len(candidates) - sum(j.source in DIRECT_SOURCES for j in candidates)} employer-linked aggregators / "
                f"{skipped} aggregator-only skipped")
     with ThreadPoolExecutor(max_workers=4) as pool:
