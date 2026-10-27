@@ -6,6 +6,7 @@ from typing import Any
 from .models import Job
 from .requirements import assess_requirements, review_assessment, role_scope
 from .trust import publication_basis
+from .source_trust import is_intermediary
 from .rules import (
     ADJACENT_OWNERSHIP_SIGNALS, AGGREGATOR_SOURCES, CORE_GROUPS, DIRECT_SOURCES,
     FOREIGN_MARKERS, HARD_VETO_TITLE_TERMS, HEAVY_ADJACENT_TERMS, REMOTE_US_MARKERS,
@@ -357,7 +358,10 @@ def apply_freshness(job: Job, config: dict[str, Any], *, board_initialized: bool
         why.append("older than 7d -10")
     priority += fresh_adj
 
-    if job.source in DIRECT_SOURCES:
+    if is_intermediary(job):
+        priority -= 8
+        why.append("recruiting intermediary / client application not confirmed -8")
+    elif job.source in DIRECT_SOURCES:
         priority += 4
         why.append("direct employer source +4")
     elif job.source in AGGREGATOR_SOURCES:
@@ -424,7 +428,7 @@ def freshness_label(job: Job) -> str:
     return "OLDER"
 
 def _record_rank(job: Job, config: dict[str, Any]) -> tuple[int, int, int, int]:
-    direct = 1 if job.source in DIRECT_SOURCES else 0
+    direct = 1 if job.source in DIRECT_SOURCES and not is_intermediary(job) else 0
     loc = 1 if region_status(job, config)[0] else 0
     published = 1 if job.published_at else 0
     return direct, loc, published, job.fit_score
