@@ -147,7 +147,7 @@ def _structured_ats_check(job, timeout: int):
                     parsed = urllib.parse.urlsplit(link)
                     if (parsed.hostname == "apply.workable.com"
                             and re.search(
-                                rf"^/{re.escape(account)}/j/{re.escape(expected)}(?:/|$)",
+                                rf"^/(?:{re.escape(account)}/)?j/{re.escape(expected)}(?:/|$)",
                                 parsed.path, re.I)):
                         return ("Available", "Exact Workable requisition and application link confirmed by employer widget.")
             return None
