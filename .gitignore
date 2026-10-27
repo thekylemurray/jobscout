@@ -1,5 +1,6 @@
 # Runtime state and user configuration
 config.json
+config.backup-*.json
 candidate_evidence.json
 data/
 output/
