@@ -9,7 +9,7 @@ import json
 
 EXPANSION_BOARDS: tuple[dict[str, object], ...] = (
     {"company": "Hugging Face", "source": "workable", "board": "huggingface", "enabled": True},
-    {"company": "Huzzle", "source": "workable", "board": "huzzle", "enabled": True},
+    {"company": "Huzzle", "source": "workable", "board": "huzzle", "enabled": False},
     {"company": "Dodge Construction Network", "source": "workable",
      "board": "dodge-construction-network", "enabled": True},
     {"company": "Zensai", "source": "recruitee", "board": "zensai", "enabled": True},
