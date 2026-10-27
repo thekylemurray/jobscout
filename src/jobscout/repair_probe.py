@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 from .http import request_json, request_json_post
+from .sources_expansion import workable_jobs
+from .verification import check_application
+from .utils import iso_now
 
 
 def main() -> int:
@@ -31,6 +34,17 @@ def main() -> int:
     except Exception as exc:
         failures.append("Postman")
         print(f"FAIL Postman Workday: {type(exc).__name__}: {exc}")
+    try:
+        candidates = workable_jobs("Hugging Face", "huggingface", iso_now())
+        if not candidates:
+            raise ValueError("No Workable jobs to test")
+        result = check_application(candidates[0])
+        if result.availability != "Available":
+            raise ValueError("Workable widget verification was not conclusive: " + result.availability_note)
+        print(f"OK Workable requisition: {result.uid} independently confirmed")
+    except Exception as exc:
+        failures.append("Workable exact verification")
+        print(f"FAIL Workable exact verification: {type(exc).__name__}: {exc}")
     return 1 if failures else 0
 
 
