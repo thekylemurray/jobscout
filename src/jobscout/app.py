@@ -50,14 +50,25 @@ def fetch_all(config: dict[str, Any], state: dict[str, Any], cache: dict[str, An
             log.append(f"FAIL {company} ({source}): {type(e).__name__}: {e}")
             continue
 
+        source_eligible = 0
+        source_strong = 0
         for job in raw:
             is_new = observe_requisition(job, state)
             job = score_job(job, config)
             job = apply_freshness(job, config, board_initialized=initialized, is_new=is_new)
             if job.eligible:
                 jobs.append(job)
+                source_eligible += 1
+                if job.fit_score >= 75:
+                    source_strong += 1
             else:
                 rejected.append(job)
+
+        if source in {"workable", "recruitee"}:
+            log.append(
+                f"ATS_SOURCE_YIELD {company} ({source}): raw {len(raw)} / "
+                f"eligible {source_eligible} / fit75+ {source_strong}"
+            )
 
         board_state[board_key] = {"initialized": True, "last_checked_at": iso_now()}
 
