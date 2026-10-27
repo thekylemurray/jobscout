@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.2.1 — Verified applications and ATS source repair
+
+- Verify Workable openings by exact account, job shortcode, title and application link; avoid HTML-only false positives.
+- Downgrade Huzzle’s recruiting-intermediary postings instead of treating its client jobs as direct-employer openings.
+- Cap recommendation priority (not fit) for unverified aggregator updates and historically closed requisitions.
+- Add safe `repair-sources` CLI, migrating Amplitude to Ashby and Postman to Workday with an automatic config backup.
+- Track employer-board quality via `ATS_SOURCE_YIELD`; preserve scoring, preferences, profiles and job histories.
+
+
+
 ## 2.2.0 — Personal CLI source expansion preview
 
 - Added no-token public Workable, Recruitee XML and Startup Jobs RSS adapters.
