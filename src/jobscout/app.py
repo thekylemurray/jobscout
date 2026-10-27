@@ -19,7 +19,7 @@ from .paths import RuntimePaths
 from .scoring import application_tier, apply_freshness, dedupe_jobs, freshness_label, score_job
 from .sources import SOURCE_FUNCS
 from .trust import observe_requisition, remember_verification
-from .verification import verify_shortlist
+from .verification import apply_trust_priority, verify_shortlist
 from .utils import as_text, has_any, iso_now, load_json, now_utc, parse_dt, save_json
 
 def fetch_all(config: dict[str, Any], state: dict[str, Any], cache: dict[str, Any], log: list[str]) -> tuple[list[Job], list[Job]]:
@@ -83,7 +83,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
     # Always keep a complete eligible-candidate file for tuning. The dashboard is
     # intentionally broader than alerts: missing a plausible role is worse than
     # spending 30 seconds reviewing one extra candidate.
-    all_eligible = sorted(jobs, key=lambda j: (j.fit_score, j.priority_score), reverse=True)
+    all_eligible = sorted(jobs, key=lambda j: (j.priority_score, j.fit_score), reverse=True)
 
     visible = [
         j for j in jobs
@@ -374,6 +374,7 @@ def run_once(paths: RuntimePaths, *, open_dashboard: bool = False, quiet: bool =
     log: list[str] = [f"JobScout v{__version__} run {iso_now()}"]
     jobs, rejected = fetch_all(config, state, cache, log)
     jobs, closed = verify_shortlist(jobs, config, log)
+    apply_trust_priority(jobs, state, log)
     rejected.extend(closed)
     for job in jobs + closed:
         remember_verification(job, state)
