@@ -234,7 +234,11 @@ def check_application(job, timeout: int = 8):
             job.availability_note = "Posting page explicitly reports an unavailable job."
         elif (_same_posting(original, resolved) and _title_in_heading(raw, job.title)
                 and APPLY.search(raw)):
-            if job.source in {"remoteok", "jobicy", "himalayas", "wwr"} and not employer_application:
+            if job.source == "workable":
+                # A matching HTML heading is not sufficient when the Workable
+                # exact-ID employer feed failed or omitted this requisition.
+                job.availability_note = "Workable page visible, but exact requisition could not be confirmed."
+            elif job.source in {"remoteok", "jobicy", "himalayas", "wwr", "startupjobs"} and not employer_application:
                 job.availability_note = "Aggregator page available; employer application unverified."
             else:
                 job.availability = "Available"
