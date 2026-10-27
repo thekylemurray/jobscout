@@ -20,6 +20,7 @@ from .scoring import application_tier, apply_freshness, dedupe_jobs, freshness_l
 from .sources import SOURCE_FUNCS
 from .trust import observe_requisition, remember_verification
 from .verification import apply_trust_priority, verify_shortlist
+from .source_trust import source_class
 from .utils import as_text, has_any, iso_now, load_json, now_utc, parse_dt, save_json
 
 def fetch_all(config: dict[str, Any], state: dict[str, Any], cache: dict[str, Any], log: list[str]) -> tuple[list[Job], list[Job]]:
@@ -98,7 +99,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
 
     with paths.eligible_csv.open("w", newline="", encoding="utf-8") as f:
         fields = [
-            "priority_score", "fit_score", "company", "title", "source", "location", "workplace",
+            "priority_score", "fit_score", "company", "title", "source", "source_class", "location", "workplace",
             "employment_type", "freshness", "age_hours", "published_at", "publication_basis", "first_seen_at", "updated_at", "availability", "availability_note", "availability_checked_at",
             "compensation", "role_lane", "lane_confidence", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on",
             "requirement_coverage", "required_gaps", "scope_flags", "requirement_evidence",
@@ -113,6 +114,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "company": j.company,
                 "title": j.title,
                 "source": j.source,
+                "source_class": source_class(j),
                 "location": j.location,
                 "workplace": j.workplace,
                 "employment_type": j.employment_type,
@@ -147,7 +149,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
 
     with paths.jobs_csv.open("w", newline="", encoding="utf-8") as f:
         fields = [
-            "priority_score", "fit_score", "company", "title", "source", "location", "workplace",
+            "priority_score", "fit_score", "company", "title", "source", "source_class", "location", "workplace",
             "employment_type", "freshness", "age_hours", "published_at", "publication_basis", "first_seen_at", "updated_at", "availability", "availability_note", "availability_checked_at",
             "compensation", "role_lane", "lane_confidence", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on",
             "requirement_coverage", "required_gaps", "scope_flags", "requirement_evidence",
@@ -162,6 +164,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "company": j.company,
                 "title": j.title,
                 "source": j.source,
+                "source_class": source_class(j),
                 "location": j.location,
                 "workplace": j.workplace,
                 "employment_type": j.employment_type,
@@ -213,8 +216,10 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "company": j.company,
                 "title": j.title,
                 "source": j.source,
+                "source_class": source_class(j),
                 "location": j.location,
                 "source": j.source,
+                "source_class": source_class(j),
                 "veto_reason": j.veto_reason,
                 "apply_url": j.apply_url,
             })
@@ -228,8 +233,10 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "company": j.company,
                 "title": j.title,
                 "source": j.source,
+                "source_class": source_class(j),
                 "location": j.location,
                 "source": j.source,
+                "source_class": source_class(j),
                 "veto_reason": j.veto_reason,
                 "apply_url": j.apply_url,
             })
@@ -300,7 +307,7 @@ def render_html(jobs: list[Job]) -> str:
             <article class='card'>
               <div class='scores'><div class='priority'>{j.priority_score}</div><small>priority</small><div class='fit'>{j.fit_score}% fit</div></div>
               <div class='body'>
-                <div class='topline'><span class='fresh'>{freshness_label(j)}</span><span class='age'>{age}</span><span class='source'>{html.escape(j.source)}</span></div>
+                <div class='topline'><span class='fresh'>{freshness_label(j)}</span><span class='age'>{age}</span><span class='source'>{html.escape(j.source)} · {html.escape(source_class(j))}</span></div>
                 <p class='status'><strong>Application:</strong> {html.escape(j.availability)} · {html.escape(j.availability_note)}<br><strong>Date evidence:</strong> {html.escape(j.publication_basis or 'unknown')} · First seen: {html.escape(j.first_seen_at)}</p>
                 <h2>{html.escape(j.title)}</h2>
                 <h3>{html.escape(j.company)}</h3>
@@ -390,6 +397,7 @@ def run_once(paths: RuntimePaths, *, open_dashboard: bool = False, quiet: bool =
     confidence_counts = Counter(j.assessment_confidence for j in jobs)
     review_count = sum(j.qualification_review_required for j in jobs)
     review_high_fit = sum(j.qualification_review_required and j.fit_score >= 80 for j in jobs)
+    log.append(f"INTERMEDIARY_LISTINGS {sum(source_class(j) == 'Recruiting intermediary' for j in jobs)}")
     log.append("ASSESSMENT_CONFIDENCE " +
                " / ".join(f"{level} {confidence_counts.get(level, 0)}"
                           for level in ("High", "Medium", "Low")))
