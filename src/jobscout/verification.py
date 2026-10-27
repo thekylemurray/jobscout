@@ -315,3 +315,42 @@ def verify_shortlist(jobs, config: dict, log: list[str]):
     stats = {s: sum(j.availability == s for j in jobs) for s in ("Available", "Closed", "Unverified")}
     log.append(f"APPLICATION_CHECKS {stats['Available']} available / {stats['Closed']} closed / {stats['Unverified']} unverified")
     return retained, closed
+
+
+def apply_trust_priority(jobs, state: dict, log: list[str] | None = None):
+    """Lower *application priority*, not fit, when source trust is insufficient.
+
+    Provider 'updated today' is not proof of a new, open job. A historical
+    closed flag is a caution until positively re-verified (not an auto-closure).
+    All unverified matches remain accessible for a manual review.
+    """
+    history = state.get("requisitions") or {}
+    counts = {"intermediary": 0, "aggregator_unverified": 0,
+              "updated_only": 0, "previously_closed": 0}
+    for job in jobs:
+        original = job.priority_score
+        reasons = []
+        if is_intermediary(job):
+            job.priority_score = min(job.priority_score, 50)
+            reasons.append("intermediary client employer not independently verified; priority capped 50")
+            counts["intermediary"] += 1
+        elif job.source in AGGREGATOR_SOURCES and job.availability != "Available":
+            job.priority_score = min(job.priority_score, 64)
+            reasons.append("unverified aggregator opportunity; priority capped 64")
+            counts["aggregator_unverified"] += 1
+        if job.publication_basis == "feed_updated_timestamp" and job.availability != "Available":
+            job.priority_score = min(job.priority_score, 56)
+            reasons.append("feed last updated is not posting date; priority capped 56")
+            counts["updated_only"] += 1
+        rec = history.get(job.history_key or "", {})
+        if rec.get("first_closed_at") and job.availability != "Available":
+            job.priority_score = min(job.priority_score, 40)
+            reasons.append("previously confirmed closed; recheck employer before applying; priority capped 40")
+            counts["previously_closed"] += 1
+        if job.priority_score < original:
+            job.priority_reasons = reasons + (job.priority_reasons or [])[:6]
+            job.risks = list(dict.fromkeys(reasons + (job.risks or [])))[:8]
+    if log is not None:
+        log.append("TRUST_PRIORITY " + " / ".join(
+            f"{key} {value}" for key, value in counts.items()))
+    return jobs
