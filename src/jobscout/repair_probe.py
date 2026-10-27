@@ -40,15 +40,6 @@ def main() -> int:
             raise ValueError("No Workable jobs to test")
         result = check_application(candidates[0])
         if result.availability != "Available":
-            first = request_json(
-                "https://apply.workable.com/api/v1/widget/accounts/huggingface?details=true"
-            ).get("jobs", [])[0]
-            print(f"DEBUG Workable uid={candidates[0].uid} title={candidates[0].title!r}")
-            print("DEBUG widget fields " + str({
-                key: first.get(key) for key in
-                ("shortcode", "code", "title", "url", "application_url", "shortlink")
-            }))
-        if result.availability != "Available":
             raise ValueError("Workable widget verification was not conclusive: " + result.availability_note)
         print(f"OK Workable requisition: {result.uid} independently confirmed")
     except Exception as exc:
