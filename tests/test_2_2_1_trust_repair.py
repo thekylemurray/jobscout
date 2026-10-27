@@ -210,3 +210,42 @@ def test_repair_cli_dry_run_backup_idempotent_preserves_history(config, tmp_path
     assert len(list(tmp_path.glob("config.backup-*.json"))) == 1
     assert _repair_sources(paths) == 0
     assert len(list(tmp_path.glob("config.backup-*.json"))) == 1
+
+
+
+def test_csv_output_writers_accept_source_class_for_rejected_and_near_miss(config, tmp_path):
+    """Regression: real scan failed after successful fetch/score on CSV writerow."""
+    import csv
+
+    from jobscout.app import write_outputs
+
+    paths = RuntimePaths.from_home(tmp_path)
+    paths.ensure()
+    good = posting(title="Website Manager", availability="Unverified",
+                   fit_score=88, priority_score=64, discovery_status="baseline")
+    # These both appear in rejected.csv; web title also in near_miss.csv.
+    review = posting(uid="workable:huzzle:r1", company="Huzzle",
+                     title="Web Content Writer Internship",
+                     intermediary=True, fit_score=0, priority_score=0,
+                     eligible=False, veto_reason="Internship outside target seniority")
+    outside = posting(uid="workable:other:r2", company="Example",
+                      title="Finance Officer", fit_score=0, priority_score=0,
+                      eligible=False, veto_reason="Outside selected career lane")
+    state = {"jobs": {}, "requisitions": {}}
+    write_outputs([good], [review, outside], config, state, paths)
+
+    for filename, expected_count in ((paths.eligible_csv, 1),
+                                     (paths.jobs_csv, 1),
+                                     (paths.near_miss_csv, 1),
+                                     (paths.rejected_csv, 2)):
+        with filename.open(encoding="utf-8", newline="") as handle:
+            reader = csv.DictReader(handle)
+            rows = list(reader)
+        assert len(rows) == expected_count, filename
+        assert "source_class" in reader.fieldnames, filename
+        assert all(row["source_class"] for row in rows)
+        assert all(None not in row for row in rows)  # no surprise CSV keys
+    with paths.near_miss_csv.open(encoding="utf-8", newline="") as handle:
+        row = next(csv.DictReader(handle))
+        assert row["source_class"] == "Recruiting intermediary"
+        assert row["source"] == "workable"
