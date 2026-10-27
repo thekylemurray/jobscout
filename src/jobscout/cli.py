@@ -117,7 +117,7 @@ def _write_updated_config(paths: RuntimePaths, updated: dict) -> str:
                 prefix="config.new-", suffix=".json", delete=False) as handle:
             temp_name = handle.name
             json.dump(updated, handle, indent=2, ensure_ascii=False)
-            handle.write("\\n")
+            handle.write("\n")
         os.replace(temp_name, paths.config)
     except OSError:
         if temp_name:
