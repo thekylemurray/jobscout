@@ -11,6 +11,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from .http import UA
 from .rules import DIRECT_SOURCES
+from .source_trust import is_intermediary
 from .utils import iso_now, strip_html
 
 CLOSED = re.compile(
@@ -86,7 +87,7 @@ def _workday_endpoint(url: str) -> str | None:
 def _structured_ats_endpoint(job):
     """Identify the exact public ATS detail URL from a normalized source ID."""
     source = job.source
-    if source not in {"greenhouse", "smartrecruiters"}:
+    if source not in {"greenhouse", "smartrecruiters", "workable"}:
         return None
     parts = (job.uid or "").split(":")
     if len(parts) < 3 or parts[0] != source:
@@ -104,6 +105,8 @@ def _structured_ats_endpoint(job):
     if source == "greenhouse":
         return (f"https://boards-api.greenhouse.io/v1/boards/{quoted_board}/jobs/{quoted_id}"
                 "?content=true")
+    if source == "workable":
+        return f"https://apply.workable.com/api/v1/widget/accounts/{quoted_board}?details=true"
     return (f"https://api.smartrecruiters.com/v1/companies/{quoted_board}/postings/{quoted_id}")
 
 
@@ -121,6 +124,32 @@ def _structured_ats_check(job, timeout: int):
         with urllib.request.urlopen(req, timeout=timeout) as response:
             data = json.loads(response.read(1_000_000).decode("utf-8", errors="replace"))
         if not isinstance(data, dict):
+            return None
+        if job.source == "workable":
+            expected = (job.uid or "").split(":")[-1]
+            account = (job.uid or "").split(":")[1].lower()
+            rows = data.get("jobs")
+            if not isinstance(rows, list):
+                return None
+            for listing in rows:
+                if not isinstance(listing, dict):
+                    continue
+                shortcode = str(listing.get("shortcode") or listing.get("code") or "")
+                if shortcode != expected or _norm(listing.get("title") or "") != _norm(job.title):
+                    continue
+                # Verify the application link is for this exact Workable account
+                # and job, rather than a generic or third-party careers page.
+                urls = [listing.get("url") or "", listing.get("application_url") or "",
+                        listing.get("shortlink") or ""]
+                for link in urls:
+                    if not _safe_public_url(link):
+                        continue
+                    parsed = urllib.parse.urlsplit(link)
+                    if (parsed.hostname == "apply.workable.com"
+                            and re.search(
+                                rf"^/(?:{re.escape(account)}/)?j/{re.escape(expected)}(?:/|$)",
+                                parsed.path, re.I)):
+                        return ("Available", "Exact Workable requisition and application link confirmed by employer widget.")
             return None
         if job.source == "greenhouse":
             actual_id = str(data.get("id", ""))
@@ -148,6 +177,10 @@ def check_application(job, timeout: int = 8):
     job.availability = "Unverified"
     job.availability_checked_at = iso_now()
     job.availability_note = "Could not independently verify this exact application."
+    if is_intermediary(job):
+        job.availability_note = (
+            "Recruiting intermediary; client employer application not independently verified.")
+        return job
     original = job.job_url or job.apply_url
     # For aggregator discoveries, check the employer application if one exists.
     aggregator_hosts = ("remoteok.com", "jobicy.com", "himalayas.app",
@@ -201,7 +234,11 @@ def check_application(job, timeout: int = 8):
             job.availability_note = "Posting page explicitly reports an unavailable job."
         elif (_same_posting(original, resolved) and _title_in_heading(raw, job.title)
                 and APPLY.search(raw)):
-            if job.source in {"remoteok", "jobicy", "himalayas", "wwr"} and not employer_application:
+            if job.source == "workable":
+                # A matching HTML heading is not sufficient when the Workable
+                # exact-ID employer feed failed or omitted this requisition.
+                job.availability_note = "Workable page visible, but exact requisition could not be confirmed."
+            elif job.source in {"remoteok", "jobicy", "himalayas", "wwr", "startupjobs"} and not employer_application:
                 job.availability_note = "Aggregator page available; employer application unverified."
             else:
                 job.availability = "Available"
@@ -245,10 +282,11 @@ def select_verification_candidates(jobs, config: dict):
     min_fit = float(config.get("dashboard_threshold", 52))
     eligible = [j for j in jobs if j.eligible and j.fit_score >= min_fit]
     ranking = lambda j: (j.fresh, j.priority_score, j.fit_score)
-    direct = sorted((j for j in eligible if j.source in DIRECT_SOURCES),
-                    key=ranking, reverse=True)
+    direct = sorted((j for j in eligible if j.source in DIRECT_SOURCES
+                     and not is_intermediary(j)), key=ranking, reverse=True)
     linked = sorted((j for j in eligible if j.source not in DIRECT_SOURCES
-                     and _has_external_application(j)), key=ranking, reverse=True)
+                     and not is_intermediary(j) and _has_external_application(j)),
+                    key=ranking, reverse=True)
     # Prefer employer-sourced records; never burn a check on aggregator-only URLs.
     return (direct + linked)[:max_checks]
 
@@ -264,7 +302,7 @@ def verify_shortlist(jobs, config: dict, log: list[str]):
     skipped = sum(j.source in AGGREGATOR_SOURCES and not _has_external_application(j)
                   for j in jobs)
     log.append(f"APPLICATION_CHECK_SCOPE {len(candidates)} requested / "
-               f"{sum(j.source in DIRECT_SOURCES for j in candidates)} employer-hosted / "
+               f"{sum(j.source in DIRECT_SOURCES and not is_intermediary(j) for j in candidates)} employer-hosted / "
                f"{len(candidates) - sum(j.source in DIRECT_SOURCES for j in candidates)} employer-linked aggregators / "
                f"{skipped} aggregator-only skipped")
     with ThreadPoolExecutor(max_workers=4) as pool:
@@ -281,3 +319,42 @@ def verify_shortlist(jobs, config: dict, log: list[str]):
     stats = {s: sum(j.availability == s for j in jobs) for s in ("Available", "Closed", "Unverified")}
     log.append(f"APPLICATION_CHECKS {stats['Available']} available / {stats['Closed']} closed / {stats['Unverified']} unverified")
     return retained, closed
+
+
+def apply_trust_priority(jobs, state: dict, log: list[str] | None = None):
+    """Lower *application priority*, not fit, when source trust is insufficient.
+
+    Provider 'updated today' is not proof of a new, open job. A historical
+    closed flag is a caution until positively re-verified (not an auto-closure).
+    All unverified matches remain accessible for a manual review.
+    """
+    history = state.get("requisitions") or {}
+    counts = {"intermediary": 0, "aggregator_unverified": 0,
+              "updated_only": 0, "previously_closed": 0}
+    for job in jobs:
+        original = job.priority_score
+        reasons = []
+        if is_intermediary(job):
+            job.priority_score = min(job.priority_score, 50)
+            reasons.append("intermediary client employer not independently verified; priority capped 50")
+            counts["intermediary"] += 1
+        elif job.source in AGGREGATOR_SOURCES and job.availability != "Available":
+            job.priority_score = min(job.priority_score, 64)
+            reasons.append("unverified aggregator opportunity; priority capped 64")
+            counts["aggregator_unverified"] += 1
+        if job.publication_basis == "feed_updated_timestamp" and job.availability != "Available":
+            job.priority_score = min(job.priority_score, 56)
+            reasons.append("feed last updated is not posting date; priority capped 56")
+            counts["updated_only"] += 1
+        rec = history.get(job.history_key or "", {})
+        if rec.get("first_closed_at") and job.availability != "Available":
+            job.priority_score = min(job.priority_score, 40)
+            reasons.append("previously confirmed closed; recheck employer before applying; priority capped 40")
+            counts["previously_closed"] += 1
+        if job.priority_score < original:
+            job.priority_reasons = reasons + (job.priority_reasons or [])[:6]
+            job.risks = list(dict.fromkeys(reasons + (job.risks or [])))[:8]
+    if log is not None:
+        log.append("TRUST_PRIORITY " + " / ".join(
+            f"{key} {value}" for key, value in counts.items()))
+    return jobs

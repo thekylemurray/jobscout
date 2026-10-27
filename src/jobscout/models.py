@@ -44,3 +44,4 @@ class Job:
     assessment_confidence: str = "Not assessed"
     qualification_review_reasons: list[str] | None = None
     qualification_review_required: bool = False
+    intermediary: bool = False

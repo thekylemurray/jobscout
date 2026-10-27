@@ -13,6 +13,7 @@ from .app import render_html, run_once, watch
 from .config import default_config, validate_config
 from .demo import demo_jobs
 from .expansion_catalog import add_sources, planned_sources
+from .source_repairs import repair_sources
 from .paths import RuntimePaths
 from .requirements import validate_candidate_evidence
 from .utils import load_json
@@ -44,6 +45,9 @@ def _parser() -> argparse.ArgumentParser:
     expand = sub.add_parser("add-sources", help="append curated new job boards to local config")
     expand.add_argument("--dry-run", action="store_true",
                         help="show proposed boards without editing config.json")
+    repair = sub.add_parser("repair-sources", help="fix employers that migrated applicant tracking platforms")
+    repair.add_argument("--dry-run", action="store_true",
+                        help="preview exact changes without editing config.json")
     return p
 
 
@@ -101,6 +105,71 @@ def _init(paths: RuntimePaths, force: bool) -> int:
     return 0
 
 
+def _write_updated_config(paths: RuntimePaths, updated: dict) -> str:
+    """Backup first, then atomically replace config; never touch data/state."""
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
+    backup = paths.config.with_name(f"config.backup-{stamp}.json")
+    shutil.copy2(paths.config, backup)
+    temp_name = ""
+    try:
+        with tempfile.NamedTemporaryFile(
+                "w", encoding="utf-8", dir=paths.config.parent,
+                prefix="config.new-", suffix=".json", delete=False) as handle:
+            temp_name = handle.name
+            json.dump(updated, handle, indent=2, ensure_ascii=False)
+            handle.write("\n")
+        os.replace(temp_name, paths.config)
+    except OSError:
+        if temp_name:
+            try:
+                os.unlink(temp_name)
+            except OSError:
+                pass
+        raise
+    return str(backup)
+
+
+def _repair_sources(paths: RuntimePaths, dry_run: bool = False) -> int:
+    if not paths.config.exists():
+        print(f"FAIL config missing: {paths.config}")
+        return 1
+    try:
+        config = json.loads(paths.config.read_text(encoding="utf-8-sig"))
+    except (OSError, ValueError) as exc:
+        print(f"FAIL cannot parse config: {exc}")
+        return 1
+    if not isinstance(config, dict):
+        print("FAIL config must be a JSON object")
+        return 1
+    problems = validate_config(config)
+    if problems:
+        print("FAIL existing config invalid: " + "; ".join(problems))
+        return 1
+    updated, changes = repair_sources(config)
+    if not changes:
+        print("No source repairs required; existing configuration left unchanged.")
+        return 0
+    for change in changes:
+        print(f"  {change['company']}: {change['old_source']} [{change['old_board']}]"
+              f" -> {change['new_source']} [{change['new_board']}]"
+              + ("" if change['enabled'] else " (remains disabled)"))
+    if dry_run:
+        print(f"Dry run: {len(changes)} employer board(s) would be repaired.")
+        return 0
+    problems = validate_config(updated)
+    if problems:
+        print("FAIL repaired config invalid: " + "; ".join(problems))
+        return 1
+    try:
+        backup = _write_updated_config(paths, updated)
+    except OSError as exc:
+        print(f"FAIL unable to save repaired configuration: {exc}")
+        return 1
+    print(f"Updated {len(changes)} employer board(s). Backup: {backup}")
+    print("Personal evidence, saved history, employer preferences and disabled flags preserved.")
+    return 0
+
+
 def _add_sources(paths: RuntimePaths, dry_run: bool = False) -> int:
     """Update the user's local config, preserving all existing preferences."""
     if not paths.config.exists():
@@ -131,25 +200,10 @@ def _add_sources(paths: RuntimePaths, dry_run: bool = False) -> int:
     if problems:
         print("FAIL merged config invalid: " + "; ".join(problems))
         return 1
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S-%f")
-    backup = paths.config.with_name(f"config.backup-{stamp}.json")
-    shutil.copy2(paths.config, backup)
-    temp_name = ""
     try:
-        with tempfile.NamedTemporaryFile(
-                "w", encoding="utf-8", dir=paths.config.parent,
-                prefix="config.new-", suffix=".json", delete=False) as handle:
-            temp_name = handle.name
-            json.dump(updated, handle, indent=2, ensure_ascii=False)
-            handle.write("\n")
-        os.replace(temp_name, paths.config)
+        backup = _write_updated_config(paths, updated)
     except OSError as exc:
-        if temp_name:
-            try:
-                os.unlink(temp_name)
-            except OSError:
-                pass
-        print(f"FAIL could not update config: {exc}; original backup: {backup}")
+        print(f"FAIL could not update config: {exc}")
         return 1
     print(f"Added {len(added)} job sources to {paths.config}")
     print(f"Original configuration backed up at {backup}")
@@ -173,6 +227,8 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(_doctor(paths))
     if args.command == "add-sources":
         raise SystemExit(_add_sources(paths, dry_run=args.dry_run))
+    if args.command == "repair-sources":
+        raise SystemExit(_repair_sources(paths, dry_run=args.dry_run))
     if args.command == "demo":
         config = load_json(paths.config, default_config()) if paths.config.exists() else default_config()
         jobs = demo_jobs(config)

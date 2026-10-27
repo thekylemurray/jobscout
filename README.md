@@ -58,6 +58,8 @@ Then edit `config.json` to set your local regions and source boards. Validate it
 
 ```bash
 jobscout doctor
+jobscout add-sources [--dry-run]
+jobscout repair-sources [--dry-run]
 ```
 
 Run one scan and open the dashboard:
@@ -71,6 +73,10 @@ Or generate a completely offline synthetic demo:
 ```bash
 jobscout demo --open
 ```
+
+## JobScout 2.2.1 — reliability update
+
+Recheck exact Workable requisitions, distinguish recruiting intermediaries and source timestamps, and repair Amplitude/Postman ATS migrations using `jobscout repair-sources --dry-run` then `jobscout repair-sources`. See [maintenance notes](docs/SOURCE_EXPANSION.md#v221--employer-trust-and-ats-repair-personal-cli).
 
 ## CLI
 

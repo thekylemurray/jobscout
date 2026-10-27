@@ -54,3 +54,42 @@ Potential caveats: Workable's public widget may rate-limit; Recruitee feed marku
 ## Next expansion options
 
 After comparing a real scan, consider more targeted US employer accounts, Rippling and Personio, and an authenticated Startup Jobs JSON API if a free key is useful. Avoid expanding more broadly until we know the incremental source value.
+
+## v2.2.1 — employer trust and ATS repair (personal CLI)
+
+This maintenance release improves **application trust and action priority**, without changing your v2.1 fit/qualification scoring. Your personal `config.json`, `candidate_evidence.json`, and `data/state.json` remain local.
+
+- **Workable:** Exact publication verification requires a matching Workable account, shortcode, title, and application URL from the public employer widget. Generic landing pages do not establish a verified opening. An inaccessible widget is **Unverified**, not Closed.
+- **Huzzle:** Its Workable account represents a recruiting intermediary that places applicants at client companies. Those jobs remain discoverable if your local source is enabled, but are labeled **Recruiting intermediary**, have no direct-employer trust bonus or automatic application-verification privilege, and receive lower application priority. Huzzle is optional/disabled by default in newly generated expansion catalogs; existing user enable/disable settings are preserved.
+- **Unverified aggregator rankings:** A missing verified employer application caps priority at 64; `feed_updated_timestamp` records cap at 56, and known historically closed requisitions at 40 until reverified. Fit scores, underlying eligibility, manual review and deduplicated history remain unchanged. A verified employer job can rank above a 96-fit stale aggregator listing.
+- **Amplitude:** Update old Greenhouse board to `source=ashby, board=amplitude`, matching its official careers link.
+- **Postman:** Update old Greenhouse board to `source=workday, board=https://postman.wd108.myworkdayjobs.com/careers`.
+- **Source evaluation:** `ATS_SOURCE_YIELD` log lines show every Workable/Recruitee board's raw, eligible, and 75+ fit counts. In the preceding v2.2 scan, Recruitee contributed no eligible jobs; Huzzle's Workable pool generated disproportionate noise. More boards are not automatically added in this corrective release.
+
+Both new ATS endpoints were confirmed by a read-only GitHub Actions check on October 27, 2026: **Amplitude Ashby 40 records**, **Postman Workday 20 first-page records**. Those totals establish feed health only, not current personally relevant opportunities.
+
+### Update your existing configuration safely
+
+Install v2.2.1 in a **new** extracted directory and copy your original `config.json`, `candidate_evidence.json`, and `data/` folder there. Then from the directory containing `pyproject.toml`:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e .
+.\.venv\Scripts\jobscout.exe --version
+.\.venv\Scripts\jobscout.exe repair-sources --dry-run
+.\.venv\Scripts\jobscout.exe repair-sources
+.\.venv\Scripts\jobscout.exe doctor
+.\.venv\Scripts\jobscout.exe scan --open
+```
+
+The repair command changes only **existing, exact old Amplitude/Postman Greenhouse entries**; it will not create new employer rows, alter compensation or geographical preferences, turn disabled entries back on, or reset historic alerts. A timestamped `config.backup-*.json` is saved before updating. Re-running is safe and reports no further changes.
+
+Review `last_run.log`: `ATS_SOURCE_YIELD`, `TRUST_PRIORITY`, `INTERMEDIARY_LISTINGS`, `SOURCE_HEALTH`, `APPLICATION_CHECKS`. `eligible_all.csv` and `jobs.csv` expose `source_class` to distinguish the intermediary from the actual employer.
+
+The source configuration repair is **not performed by simply replacing files**; it requires the explicit `repair-sources` command after installing the new version.
+
+### Limitations
+
+Workable's widget record confirms an exact current listing and linked application but not successful submission, employer selection or interview availability. The Huzzle relationship is known from its public careers pages and client-placement descriptions. Existing aggregated listings are not automatically deleted or deemed closed solely because a source API fails. A result whose feed was recently updated is not necessarily newly posted.
+
+Only expand additional Workable/Recruitee companies after a side-by-side scan demonstrates extra strong-fit, dated, employer-verifiable jobs, rather than duplicates or agency listings.
