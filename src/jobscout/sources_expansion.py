@@ -77,6 +77,7 @@ def workable_jobs(company: str, board: str, first_seen: str,
         out.append(Job(
             uid=f"workable:{account}:{job_id}",
             company=as_text(company or payload.get("name") or "Workable"),
+            intermediary=(account == "huzzle"),
             source="workable",
             title=title, location=location,
             workplace=workplace,
