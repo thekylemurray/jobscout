@@ -5,6 +5,8 @@ import re
 from typing import Any
 
 from .models import Job
+from .profile_constraints import (STATE_CODES, constraint_result, matching_lane,
+                                  validate_extended_profile)
 from .profile_signals import skill_signals, credential_review_text, labeled_full_time_pay
 from .utils import as_text, has_any, has_term, matched_terms, strip_html
 
@@ -52,6 +54,7 @@ def validate_profile(profile: Any) -> list[str]:
             low, high = override.get('annual_min'), override.get('annual_max')
             if type(low) not in (int, float) or type(high) not in (int, float) or not 0 <= low <= high < float('inf'):
                 errors.append('confirmed annual salary bounds must be finite nonnegative numbers in order')
+    errors.extend(validate_extended_profile(profile))
     return errors
 
 
@@ -132,6 +135,12 @@ def profile_location(job: Job, config: dict[str, Any]) -> tuple[bool, str]:
         return False, 'outside configured cities; remote disabled'
     if 'remote' not in work + ' ' + loc:
         return False, f'location outside selected cities; no explicit remote eligibility: {as_text(job.location) or "not provided"}'
+    state = config['profile'].get('home_state', '')
+    if state and 'remote' in work + ' ' + loc:
+        state_code = STATE_CODES.get(state.lower(), state.upper() if len(state) == 2 else '')
+        if re.search(r'\b' + re.escape(state) + r'\b', loc, re.I) or (
+                state_code and re.search(r'\b' + re.escape(state_code) + r'\b', loc, re.I)):
+            return True, f'remote location includes {state}; confirm posting-specific restrictions'
     if has_any(loc, ['united states', 'usa', 'u.s.', 'us', 'worldwide', 'anywhere', 'global']):
         return True, 'remote; verify eligibility from your home state and any restrictions'
     if loc.strip() in ('', 'remote', 'fully remote'):
@@ -172,7 +181,11 @@ def score_profile(job: Job, config: dict[str, Any]) -> Job:
     allowed, location_reason = profile_location(job, config)
     if not allowed:
         return reject(location_reason)
+    violation, constraint_notes = constraint_result(job, p)
+    if violation:
+        return reject(violation)
     job.risks.append(location_reason)
+    job.risks.extend(constraint_notes)
     if has_term(title, 'head of') and not has_any(title, p['seniority_terms']):
         job.risks.append('Head of may be Director-equivalent; verify scope and compensation')
     if not as_text(job.employment_type).strip():
@@ -205,7 +218,11 @@ def score_profile(job: Job, config: dict[str, Any]) -> Job:
         clauses = re.split(r'[\n.!?;]+', review_text)
         evidence = next((x.strip() for x in clauses if has_term(x, term)), term)
         job.risks.append(f'review {term}: {evidence[:260]}')
-    hits = skill_signals(desc, p['core_skills'])
+    lane = matching_lane(title, p.get('career_lanes', []))
+    if lane:
+        job.role_lane = lane['name']
+    lane_skills = lane.get('core_skills', []) if lane else []
+    hits = skill_signals(desc, list(dict.fromkeys(p['core_skills'] + lane_skills)))
     job.fit_score = min(96, 50 + 6 * len(hits))
     job.lane_confidence = 0  # portable matcher does not estimate lane confidence
     job.reasons = ['target title matched'] + [f'experience signal: {category} (matched: {evidence})' for category, evidence in hits.items()]
