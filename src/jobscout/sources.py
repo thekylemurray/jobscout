@@ -154,7 +154,8 @@ def remoteok_jobs(company: str, board: str, first_seen: str, cache: dict[str, An
         ))
     return out
 
-def smartrecruiters_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any] | None = None) -> list[Job]:
+def smartrecruiters_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any] | None = None,
+                         *, title_terms: list[str] | None = None) -> list[Job]:
     """SmartRecruiters public Posting API.
 
     releasedDate is an authoritative publication timestamp. Full descriptions are
@@ -188,6 +189,7 @@ def smartrecruiters_jobs(company: str, board: str, first_seen: str, cache: dict[
             department = ((j.get("department") or {}).get("label") or "")
             should_detail = (
                 title_might_be_relevant(title)
+                or (title_terms is not None and has_any(title, title_terms))
                 or has_any(function, ["marketing", "communications", "content"])
                 or has_any(department, ["marketing", "communications", "content", "digital"])
             )
