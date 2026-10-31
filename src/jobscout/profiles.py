@@ -108,7 +108,7 @@ def salary_from_description(description: str) -> str:
     labels = re.compile(
         r'\b(?:annual\s+base\s+salary|base\s+salary(?:\s+range)?|'
         r'salary\s+range|compensation\s+ranges?|base\s+pay\s+range|'
-        r'pay\s+range|salary\s+band|pay\s+transparency|'
+        r'salary\s+band|'
         r'united\s+states\s+salary\s+range)\b', re.I)
     found = []
     for match in pattern.finditer(text):
@@ -133,6 +133,12 @@ def salary_from_description(description: str) -> str:
     if not found:
         return ''
     low, high = min(a for a, _ in found), max(b for _, b in found)
+    # Legacy explicitly labeled annual-base ranges retain their literal number
+    # formatting. This maintains existing export compatibility.
+    if len(found) == 1:
+        first = pattern.search(text)
+        if first and re.search(r'annual\s+base\s+salary', text[max(0, first.start()-380):first.start()], re.I):
+            return f'USD {first.group(1)}-{first.group(2)} annual base'
     suffix = ' (multiple geographic salary ranges; verify home location)' if len(found) > 1 else ''
     return f'USD {low:g}-{high:g} annual base{suffix}'
 
