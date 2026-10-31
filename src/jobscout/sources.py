@@ -226,8 +226,11 @@ def smartrecruiters_jobs(company: str, board: str, first_seen: str, cache: dict[
             if not desc:
                 desc = " ".join([title, function, department])
 
-            posting_url = detail.get("postingUrl") or ""
-            apply_url = detail.get("applyUrl") or posting_url or (detail.get("ref") or "")
+            # The API 'ref' is a machine-readable endpoint, not an application.
+            # The public posting URL pattern is documented by SmartRecruiters.
+            posting_url = (detail.get("postingUrl") or j.get("postingUrl")
+                           or f"https://jobs.smartrecruiters.com/{urllib.parse.quote(board, safe='')}/{urllib.parse.quote(jid, safe='')}")
+            apply_url = detail.get("applyUrl") or j.get("applyUrl") or posting_url
             emp = ((detail.get("typeOfEmployment") or {}).get("label")
                    or (j.get("typeOfEmployment") or {}).get("label") or "")
 
