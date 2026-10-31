@@ -6,7 +6,6 @@ resume is not assumed absent from the candidate: unassessed stays reviewable.
 from __future__ import annotations
 
 import re
-from .utils import extract_sections
 
 # Deliberately narrow domain signals, not generic phrases such as "operations".
 CAPABILITIES: dict[str, str] = {
@@ -40,18 +39,33 @@ def validate_evidence(profile):
 
 
 def _required_context(description):
-    """Extract dedicated requirements plus explicit requirement statements.
+    """Collect explicit mandatory requirements, never preferred/responsibility text.
 
-    General responsibilities and preferred qualifications never count on their
-    own as proof of a mandatory prerequisite.
+    Generic "qualifications" embedded in "preferred qualifications" must not be
+    treated as a required section. Match longest headings and partition before
+    considering individual qualification signals.
     """
-    sections = extract_sections(description)
-    required = sections["required"]
-    # Fall back to explicitly mandatory sentences if source sections are absent.
+    headings = re.compile(
+        r"\b(?:preferred qualifications|preferred experience|nice to have|"
+        r"required qualifications|minimum qualifications|basic qualifications|"
+        r"what you'll need|what you need|what you bring|"
+        r"responsibilities|what you'll do|what you will do|"
+        r"requirements|qualifications)\b", re.I)
+    marks = list(headings.finditer(description))
+    required = []
+    for i, mark in enumerate(marks):
+        heading = mark.group().lower()
+        if heading.startswith(("preferred", "nice ", "responsibilities", "what you'll do", "what you will do")):
+            continue
+        end = marks[i + 1].start() if i + 1 < len(marks) else len(description)
+        chunk = description[mark.end():end].lstrip(" :-–—")
+        if chunk.strip():
+            required.append(chunk)
+    # Explicit statement-level mandates also work when the source has no sections.
     lines = re.split(r"(?:\n+|(?<=[.!?])\s+)", description)
     explicit = [line.strip() for line in lines
                 if REQUIRED_INTRO.search(line) and not PREFERRED_INTRO.search(line)]
-    return " ".join([required] + explicit)
+    return " ".join(required + explicit)
 
 
 def assess_required_capabilities(description: str, profile: dict) -> tuple[list[str], int, list[str]]:
