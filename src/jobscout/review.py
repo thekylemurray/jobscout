@@ -13,6 +13,8 @@ from .utils import iso_now, strip_html
 def review_status(job):
     if not job.eligible:
         return 'Excluded'
+    if getattr(job, 'review_only', False):
+        return 'Adjacent — manual review'
     if job.risks or job.availability != 'Available':
         return 'Needs verification'
     return 'Worth reviewing'
