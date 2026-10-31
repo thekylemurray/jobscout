@@ -103,7 +103,7 @@ def salary_from_description(description: str) -> str:
     when the candidate's Washington city has not been specified.
     """
     text = re.sub(r'\s+', ' ', description)
-    amount = r'(?:(?:US)?\$)?\s*(\d{2,3}(?:,\d{3})*(?:\.\d+)?[kK]?)'
+    amount = r'(?:(?:US)?\$)?\s*(\d{2,3}(?:,\d{3})+(?:\.\d+)?|\d{5,6}(?:\.\d+)?|\d{2,3}(?:\.\d+)?[kK])'
     pattern = re.compile(r'(?<![\w\d])' + amount + r'\s*[-–—]\s*' + amount + r'(?![\w\d])')
     labels = re.compile(
         r'\b(?:annual\s+base\s+salary|base\s+salary(?:\s+range)?|'
