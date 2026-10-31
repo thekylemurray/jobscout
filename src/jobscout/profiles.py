@@ -94,21 +94,47 @@ def annual_usd(text: str) -> tuple[float, float] | None:
 
 
 def salary_from_description(description: str) -> str:
-    """Extract only explicit USD ranges near an annual base-salary statement."""
+    """Recover credible USD base-pay ranges, including location-tiered disclosures.
+
+    A numeric pay range alone is not enough: require USD/$ currency evidence and
+    an adjacent compensation-range label. Annual base pay is inferred only for
+    plausible full-time salary amounts, not for bonus/equity or hourly rates.
+    For several regions, return the full envelope; never claim a Washington band
+    when the candidate's Washington city has not been specified.
+    """
     text = re.sub(r'\s+', ' ', description)
-    amount = r'\$?\s*(\d{2,3}(?:,\d{3})?(?:\.\d+)?[kK]?)'
-    pattern = re.compile(amount + r'\s*[-–—]\s*' + amount)
+    amount = r'(?:(?:US)?\$)?\s*(\d{2,3}(?:,\d{3})*(?:\.\d+)?[kK]?)'
+    pattern = re.compile(r'(?<![\w\d])' + amount + r'\s*[-–—]\s*' + amount + r'(?![\w\d])')
+    labels = re.compile(
+        r'\b(?:annual\s+base\s+salary|base\s+salary(?:\s+range)?|'
+        r'salary\s+range|compensation\s+ranges?|base\s+pay\s+range|'
+        r'pay\s+range|salary\s+band|pay\s+transparency|'
+        r'united\s+states\s+salary\s+range)\b', re.I)
+    found = []
     for match in pattern.finditer(text):
-        context = text[max(0, match.start()-600):match.end()+80]
-        if not re.search(r'annual\s+base\s+salary', context, re.I):
+        prefix = text[max(0, match.start()-380):match.start()]
+        nearby = text[max(0, match.start()-50):min(len(text), match.end()+45)]
+        if not labels.search(prefix):
             continue
-        nearby = text[max(0, match.start()-30):match.end()+30]
-        if not re.search(r'\bUSD\b|US\$', nearby, re.I):
+        if not re.search(r'\bUSD\b|US\$|\$', nearby, re.I):
             continue
-        candidate = f'USD {match.group(1)}-{match.group(2)} annual base'
-        if annual_usd(candidate):
-            return candidate
-    return ''
+        if re.search(r'\b(?:hourly|per hour|/hr|per month|per week|'
+                     r'bonus range|equity range|total compensation range)\b',
+                     text[max(0, match.start()-50):match.start()], re.I):
+            continue
+        amounts = []
+        for value in (match.group(1), match.group(2)):
+            number = float(value.rstrip('kK').replace(',', ''))
+            amounts.append(number * 1000 if value.lower().endswith('k') else number)
+        low, high = amounts
+        if not (30000 <= low <= high <= 1000000):
+            continue
+        found.append((low, high))
+    if not found:
+        return ''
+    low, high = min(a for a, _ in found), max(b for _, b in found)
+    suffix = ' (multiple geographic salary ranges; verify home location)' if len(found) > 1 else ''
+    return f'USD {low:g}-{high:g} annual base{suffix}'
 
 
 def title_matches(title: str, terms: list[str]) -> bool:
@@ -207,6 +233,8 @@ def score_profile(job: Job, config: dict[str, Any]) -> Job:
             job.risks.append("pay period inferred as annual from labeled full-time USD pay range; verify")
     if salary and salary[1] < config['salary_floor']:
         return reject('USD salary range below minimum' + (' (annual period inferred)' if 'period inferred' in as_text(job.compensation) else ' (explicit annual)'))
+    if salary and 'multiple geographic salary ranges' in as_text(job.compensation):
+        job.risks.append('multiple geographic pay bands; verify the correct Washington/Seattle base range')
     if not salary:
         job.risks.append('annual USD base salary unverified; confirm compensation')
     elif salary[0] < config['salary_floor']:
