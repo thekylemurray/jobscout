@@ -37,3 +37,6 @@ class Job:
     availability: str = 'Unverified'
     availability_note: str = 'Availability has not been checked.'
     availability_checked_at: str = ''
+    review_only: bool = False
+    match_path: str = 'target'
+    requirement_notes: list[str] | None = None

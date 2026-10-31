@@ -5,6 +5,7 @@ import re
 from typing import Any
 
 from .models import Job
+from .portable_requirements import assess_required_capabilities, validate_evidence
 from .profile_constraints import (STATE_CODES, constraint_result, matching_lane,
                                   validate_extended_profile)
 from .profile_signals import skill_signals, credential_review_text, labeled_full_time_pay
@@ -55,6 +56,7 @@ def validate_profile(profile: Any) -> list[str]:
             if type(low) not in (int, float) or type(high) not in (int, float) or not 0 <= low <= high < float('inf'):
                 errors.append('confirmed annual salary bounds must be finite nonnegative numbers in order')
     errors.extend(validate_extended_profile(profile))
+    errors.extend(validate_evidence(profile))
     return errors
 
 
@@ -187,6 +189,7 @@ def score_profile(job: Job, config: dict[str, Any]) -> Job:
     job.role_lane = p['name']
     job.fit_score = job.priority_score = 0
     job.eligible, job.veto_reason = True, ''
+    job.review_only, job.match_path, job.requirement_notes = False, 'target', []
 
     def reject(reason):
         job.eligible = False
@@ -199,8 +202,12 @@ def score_profile(job: Job, config: dict[str, Any]) -> Job:
         return reject('excluded employer')
     if has_any(title, p['excluded_title_terms']):
         return reject('excluded job function in title')
-    if not title_matches(title, p['title_terms']):
+    primary_match = title_matches(title, p['title_terms'])
+    adjacent_match = not primary_match and title_matches(title, p.get('adjacent_title_terms', []))
+    if not primary_match and not adjacent_match:
         return reject('title outside selected career profile')
+    job.review_only = adjacent_match
+    job.match_path = 'adjacent review' if adjacent_match else 'target'
     if not seniority_matches(title, p['seniority_terms']):
         return reject(f'seniority outside selected levels ({", ".join(p["seniority_terms"])}): {title}')
     if not p['allow_contract'] and has_any(as_text(job.employment_type) + ' ' + title,
@@ -257,10 +264,21 @@ def score_profile(job: Job, config: dict[str, Any]) -> Job:
         job.role_lane = lane['name']
     lane_skills = lane.get('core_skills', []) if lane else []
     hits = skill_signals(desc, list(dict.fromkeys(p['core_skills'] + lane_skills)))
-    job.fit_score = min(96, 50 + 6 * len(hits))
+    base_fit = min(96, 50 + 6 * len(hits))
+    specialty_notes, adjustment, detail = assess_required_capabilities(desc, p)
+    job.requirement_notes = specialty_notes
+    job.risks.extend(specialty_notes)
+    # Adjacent roles are discovery aids, not auto-recommended opportunities.
+    adjacent_adj = -8 if adjacent_match else 0
+    job.fit_score = max(0, base_fit + adjustment + adjacent_adj)
+    if adjacent_match:
+        job.fit_score = min(74, job.fit_score)
+        job.risks.append('adjacent title: manual review only; verify senior individual-contributor scope')
     job.lane_confidence = 0  # portable matcher does not estimate lane confidence
-    job.reasons = ['target title matched'] + [f'experience signal: {category} (matched: {evidence})' for category, evidence in hits.items()]
-    job.score_breakdown = ['target title +50', f'{len(hits)} distinct skill categories +{6 * len(hits)} (cap 96)']
+    job.reasons = ['adjacent title; manual review only' if adjacent_match else 'target title matched'] + [f'experience signal: {category} (matched: {evidence})' for category, evidence in hits.items()]
+    job.score_breakdown = ['title base +50', f'{len(hits)} distinct skill categories +{6 * len(hits)} (cap 96)'] + detail
+    if adjacent_match:
+        job.score_breakdown.append('adjacent title -8 (capped at 74; review-only)')
     if any(has_term(job.company, x) for x in p['preferred_companies']):
         job.reasons.append('preferred employer')
     return job

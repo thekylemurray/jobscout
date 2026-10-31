@@ -154,7 +154,8 @@ def remoteok_jobs(company: str, board: str, first_seen: str, cache: dict[str, An
         ))
     return out
 
-def smartrecruiters_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any] | None = None) -> list[Job]:
+def smartrecruiters_jobs(company: str, board: str, first_seen: str, cache: dict[str, Any] | None = None,
+                         *, title_terms: list[str] | None = None) -> list[Job]:
     """SmartRecruiters public Posting API.
 
     releasedDate is an authoritative publication timestamp. Full descriptions are
@@ -188,6 +189,7 @@ def smartrecruiters_jobs(company: str, board: str, first_seen: str, cache: dict[
             department = ((j.get("department") or {}).get("label") or "")
             should_detail = (
                 title_might_be_relevant(title)
+                or (title_terms is not None and has_any(title, title_terms))
                 or has_any(function, ["marketing", "communications", "content"])
                 or has_any(department, ["marketing", "communications", "content", "digital"])
             )
@@ -226,8 +228,11 @@ def smartrecruiters_jobs(company: str, board: str, first_seen: str, cache: dict[
             if not desc:
                 desc = " ".join([title, function, department])
 
-            posting_url = detail.get("postingUrl") or ""
-            apply_url = detail.get("applyUrl") or posting_url or (detail.get("ref") or "")
+            # The API 'ref' is a machine-readable endpoint, not an application.
+            # The public posting URL pattern is documented by SmartRecruiters.
+            posting_url = (detail.get("postingUrl") or j.get("postingUrl")
+                           or f"https://jobs.smartrecruiters.com/{urllib.parse.quote(board, safe='')}/{urllib.parse.quote(jid, safe='')}")
+            apply_url = detail.get("applyUrl") or j.get("applyUrl") or posting_url
             emp = ((detail.get("typeOfEmployment") or {}).get("label")
                    or (j.get("typeOfEmployment") or {}).get("label") or "")
 

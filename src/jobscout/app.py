@@ -46,11 +46,16 @@ def fetch_all(config: dict[str, Any], state: dict[str, Any], cache: dict[str, An
                 by_uid = {}
                 for query in queries:
                     for job in func(company, board, iso_now(), cache,
-                                    title_terms=config["profile"]["title_terms"],
+                                    title_terms=(config["profile"]["title_terms"] +
+                                                 config["profile"].get("adjacent_title_terms", [])),
                                     search_text=query, progress=source_progress,
                                     seniority_terms=config["profile"]["seniority_terms"]):
                         by_uid[job.uid] = job
                 raw = list(by_uid.values())
+            elif source == "smartrecruiters" and config.get("profile"):
+                raw = func(company, board, iso_now(), cache,
+                           title_terms=(config["profile"]["title_terms"] +
+                                        config["profile"].get("adjacent_title_terms", [])))
             else:
                 raw = func(company, board, iso_now(), cache)
             messages.append(f"OK {company} ({source}): {len(raw)} jobs")
@@ -96,7 +101,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
 
     visible = [
         j for j in jobs
-        if j.fit_score >= dash_min and (j.age_hours is None or j.age_hours <= dash_hours)
+        if (j.fit_score >= dash_min or j.review_only) and (j.age_hours is None or j.age_hours <= dash_hours)
     ]
     visible.sort(key=lambda j: (j.priority_score, j.fit_score), reverse=True)
 
@@ -109,7 +114,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
         fields = [
             "priority_score", "fit_score", "company", "title", "location", "workplace",
             "employment_type", "freshness", "age_hours", "published_at", "publication_basis", "updated_at",
-            "review_status", "availability", "availability_note", "availability_checked_at", "compensation", "role_lane", "lane_confidence", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on"
+            "review_status", "availability", "availability_note", "availability_checked_at", "compensation", "role_lane", "lane_confidence", "match_path", "review_only", "requirement_notes", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on"
         ]
         w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
@@ -134,6 +139,9 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "compensation": j.compensation,
                 "role_lane": j.role_lane,
                 "lane_confidence": j.lane_confidence,
+                "match_path": j.match_path,
+                "review_only": j.review_only,
+                "requirement_notes": "; ".join(j.requirement_notes or []),
                 "apply_url": j.apply_url,
                 "reasons": "; ".join(j.reasons or []),
                 "risks": "; ".join(j.risks or []),
@@ -145,7 +153,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
         fields = [
             "priority_score", "fit_score", "company", "title", "location", "workplace",
             "employment_type", "freshness", "age_hours", "published_at", "publication_basis", "updated_at",
-            "review_status", "availability", "availability_note", "availability_checked_at", "compensation", "role_lane", "lane_confidence", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on"
+            "review_status", "availability", "availability_note", "availability_checked_at", "compensation", "role_lane", "lane_confidence", "match_path", "review_only", "requirement_notes", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on"
         ]
         w = csv.DictWriter(f, fieldnames=fields)
         w.writeheader()
@@ -170,6 +178,9 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "compensation": j.compensation,
                 "role_lane": j.role_lane,
                 "lane_confidence": j.lane_confidence,
+                "match_path": j.match_path,
+                "review_only": j.review_only,
+                "requirement_notes": "; ".join(j.requirement_notes or []),
                 "apply_url": j.apply_url,
                 "reasons": "; ".join(j.reasons or []),
                 "risks": "; ".join(j.risks or []),
@@ -235,7 +246,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
         first_age = (now_utc() - first).total_seconds() / 3600 if first else None
         is_new_enough = j.fresh and first_age is not None and 0 <= first_age <= max_age
         verified = j.availability == "Available" if config.get("profile") else True
-        if (j.priority_score >= alert_threshold and is_new_enough and verified
+        if (not j.review_only and j.priority_score >= alert_threshold and is_new_enough and verified
                 and not rec.get("alerted", False) and not hist.get("alerted", False)):
             alerts.append(j)
             rec["alerted"] = True
@@ -251,7 +262,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
 def render_html(jobs: list[Job], *, portable: bool = False) -> str:
     tier_order = ["🔥 Apply now", "🟢 Strong matches", "🟡 Worth reviewing", "🔵 Discovery"]
     if portable:
-        tier_order = ['Worth reviewing', 'Needs verification', 'Excluded']
+        tier_order = ['Worth reviewing', 'Needs verification', 'Adjacent — manual review', 'Excluded']
     buckets: dict[str, list[Job]] = {t: [] for t in tier_order}
     for j in jobs:
         buckets[review_status(j) if portable else application_tier(j)].append(j)
