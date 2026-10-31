@@ -12,6 +12,27 @@ GROUPS = {
     'vaccines': ('vaccines', r'\bvaccines?\b|\bvaccination\b'),
     'infectious disease': ('infectious disease', r'\binfectious diseases?\b'),
 }
+# Additional transferable operations terms. Use one award per conceptual category.
+# These aliases work across marketing, business operations and PMO career lanes.
+GENERAL_OPERATIONS = {
+    "cross-functional leadership": r"\bcross[ -]functional\b.{0,40}\b(?:leadership|initiatives|programs?|teams?)\b|\bcross[ -]functional\b",
+    "operating cadence": r"\boperating (?:rhythm|cadence|model)\b|\bbusiness review cadence\b",
+    "process improvement": r"\bprocess (?:improvement|optimization|redesign|design)\b|\bcontinuous improvement\b|\broot cause analysis\b",
+    "stakeholder alignment": r"\bstakeholder (?:alignment|engagement|management)\b|\binfluenc(?:e|ing) without (?:formal )?authority\b",
+    "workflow automation": r"\b(?:workflow|process) automat(?:ion|e|ed|ing)\b|\bAI.enabled operations\b",
+    "kpi dashboards": r"\bKPIs?\b|\b(?:performance|operations|executive) dashboards?\b|\bperformance tracking\b",
+    "change management": r"\bchange management\b|\b(?:tool|process) (?:adoption|rollout)\b|\brollout and adoption\b",
+    "governance": r"\bgovernance\b|\baccountability model\b|\bintake (?:process|system|management)\b",
+    "program management": r"\bprogram management\b|\bprogram (?:delivery|execution|leadership)\b",
+    "project management": r"\bproject management\b|\bproject (?:delivery|execution|planning)\b",
+    "business operations": r"\bbusiness operations\b|\boperational excellence\b|\boperating model\b",
+    "marketing operations": r"\bmarketing operations\b|\bmarketing automation\b|\bmarketing ops\b",
+    "gtm programs": r"\bGTM\b|\bgo.to.market\b",
+}
+for key, pattern in GENERAL_OPERATIONS.items():
+    GROUPS[key] = (key, pattern)
+
+
 for n, roman in [(1, 'i'), (2, 'ii'), (3, 'iii')]:
     group = (f'phase {n}', rf'\bphase\s*(?:{n}|{roman})\b')
     GROUPS[f'phase {n}'] = GROUPS[f'phase {roman}'] = group
