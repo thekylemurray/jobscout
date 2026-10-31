@@ -84,7 +84,7 @@ def _people_management(text: str) -> bool:
         r"\bdirect reports?\s*:\s*[1-9]\d*\b",
         r"\b(?:manage|supervise|hire|develop|lead)\s+(?:a |the )?(?:team of|staff of|group of)\s*\d+\b",
         r"\b(?:people management|line management|supervisory experience|personnel management)\s+(?:is\s+)?(?:required|mandatory|responsibility)\b",
-        r"\bresponsib(?:le|ility)\s+for\s+(?:hiring|managing|supervising)\s+(?:employees|staff|direct reports)\b",
+        r"\bresponsib(?:le|ility)\s+for\s+(?:hiring|managing|supervising)\s+(?:and\s+(?:managing|supervising)\s+)?(?:employees|staff|direct reports)\b",
     )
     return any(_nonnegated(clause) and any(re.search(p, clause, re.I) for p in patterns)
                for clause in _clauses(text))
