@@ -52,6 +52,10 @@ def fetch_all(config: dict[str, Any], state: dict[str, Any], cache: dict[str, An
                                     seniority_terms=config["profile"]["seniority_terms"]):
                         by_uid[job.uid] = job
                 raw = list(by_uid.values())
+            elif source == "smartrecruiters" and config.get("profile"):
+                raw = func(company, board, iso_now(), cache,
+                           title_terms=(config["profile"]["title_terms"] +
+                                        config["profile"].get("adjacent_title_terms", [])))
             else:
                 raw = func(company, board, iso_now(), cache)
             messages.append(f"OK {company} ({source}): {len(raw)} jobs")
