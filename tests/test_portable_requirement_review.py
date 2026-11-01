@@ -88,7 +88,8 @@ def test_adjacent_role_only_review_no_alert_class():
     cfg=profile_config()
     j=score_job(posting(title="Sales Operations Manager",description="Build dashboards."),cfg)
     assert j.eligible and j.review_only and j.match_path == "adjacent review"
-    assert j.fit_score <= 74
+    assert j.fit_score == max(0, j.operational_alignment_score + j.qualification_adjustment - 8)
+    assert j.match_path == "adjacent review"
     assert review_status(j) == "Adjacent — manual review"
     html=render_html([j],portable=True)
     assert "Adjacent — manual review" in html
