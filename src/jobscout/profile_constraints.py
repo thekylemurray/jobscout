@@ -92,7 +92,7 @@ def _people_management(text: str) -> bool:
         r"\b(?:direct\s+)?(?:people|personnel|line)\s+management\s+(?:experience\s+)?(?:is\s+)?(?:required|mandatory)\b",
         r"\b(?:manage|supervise|hire|develop|lead)\s+(?:a |the )?(?:team of|staff of|group of)\s*\d+\b",
         r"\b(?:manage|supervise|coach|mentor|develop)\s+(?:and\s+(?:develop|mentor|coach)\s+)?"
-        r"(?:a\s+|the\s+|our\s+)?(?:team of\s+)?(?:staff|employees|direct reports|systems administrators)\b",
+        r"(?:a\s+|the\s+|our\s+)?(?:team of\s+)?(?:staff|employees|direct reports|systems administrators|specialists|analysts|professionals)\b",
         r"\b(?:managing|management of|supervising)\s+(?:a\s+|the\s+|our\s+)?"
         r"team\s+of\s+(?:\w+\s+){0,4}(?:staff|analysts|administrators|specialists|professionals)\b",
         r"\b(?:people management|line management|supervisory experience|personnel management)"
