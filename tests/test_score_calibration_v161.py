@@ -14,7 +14,8 @@ def make_config():
         name="Example senior IC", title_terms=["program manager"],
         adjacent_title_terms=["sales operations manager"],
         core_skills=["operating cadence", "process improvement", "governance",
-                     "kpi dashboards", "workflow automation", "stakeholder alignment"],
+                     "kpi dashboards", "workflow automation", "stakeholder alignment",
+                     "change management", "program management"],
         career_lanes=[], remote_only=True, home_state="Washington",
         require_full_time=True, exclude_people_management=True,
         capability_evidence={"ethics_compliance": "unassessed",
@@ -40,8 +41,9 @@ def make_job(**kwargs):
 
 
 def operations_text():
-    return ("Build operating cadences, improve processes, develop governance, "
-            "create KPI dashboards, automate workflows, and align stakeholders.")
+    return ("Build operating cadence, process improvement, governance, "
+            "KPI dashboards, workflow automation, stakeholder alignment, "
+            "change management, and program management.")
 
 
 def test_operational_alignment_retained_when_required_specialty_unassessed():
