@@ -306,6 +306,7 @@ def render_html(jobs: list[Job], *, portable: bool = False,
     dashboard_groups = portable and primary_age_hours is not None
     if dashboard_groups:
         tier_order = ['Primary matches — recent', 'Older primary matches — still listed',
+                      'Older primary matches — availability unverified',
                       'Adjacent — manual review']
     elif portable:
         tier_order = ['Worth reviewing', 'Needs verification', 'Adjacent — manual review', 'Excluded']
@@ -317,6 +318,8 @@ def render_html(jobs: list[Job], *, portable: bool = False,
             elif (j.age_hours is not None and j.age_hours > primary_age_hours
                   and j.availability == 'Available'):
                 category = 'Older primary matches — still listed'
+            elif j.age_hours is not None and j.age_hours > primary_age_hours:
+                category = 'Older primary matches — availability unverified'
             else:
                 category = 'Primary matches — recent'
         else:
@@ -365,6 +368,9 @@ def render_html(jobs: list[Job], *, portable: bool = False,
                 "freshness window but were still listed when last checked. "
                 "Confirm they are accepting applications and meet every requirement.</p>"
                 if dashboard_groups and tier == 'Older primary matches — still listed' else
+                "<p class='section-note'>These older postings have not been confirmed as currently "
+                "available. Check directly with the employer before proceeding.</p>"
+                if dashboard_groups and tier == 'Older primary matches — availability unverified' else
                 "<p class='section-note'>Adjacent titles are manual-review leads only, "
                 "not automatic recommendations.</p>"
                 if dashboard_groups and tier == 'Adjacent — manual review' else "")
