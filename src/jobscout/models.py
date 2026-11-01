@@ -18,7 +18,9 @@ class Job:
     first_seen_at: str
     compensation: str
     updated_at: str | int | float | None = None
-    fit_score: int = 0
+    fit_score: int = 0  # adjusted fit: alignment + requirement and adjacent deductions
+    operational_alignment_score: int = 0  # transferable job-responsibility signals before deductions
+    qualification_adjustment: int = 0  # non-positive; explicit mandatory skills only
     priority_score: int = 0
     age_hours: float | None = None
     reasons: list[str] | None = None

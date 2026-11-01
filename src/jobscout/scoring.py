@@ -292,8 +292,18 @@ def apply_freshness(job: Job, config: dict[str, Any], *, board_initialized: bool
         job.fresh = False
         return job
 
+    # Portable adjusted fit already contains the specialist deduction exactly
+    # once. Priority adds only timing, source, location and salary context.
     priority = float(job.fit_score)
-    why: list[str] = [f"fit {job.fit_score}"]
+    if config.get("profile"):
+        why: list[str] = [
+            f"adjusted fit {job.fit_score} (operational alignment "
+            f"{job.operational_alignment_score}, qualifications "
+            f"{job.qualification_adjustment:+d}, adjacent "
+            f"{-8 if job.review_only else 0:+d})"
+        ]
+    else:
+        why = [f"fit {job.fit_score}"]
 
     if age is None:
         fresh_adj = -3
