@@ -143,9 +143,12 @@ def test_necessary_ethics_compliance_domain_not_drowned_out():
           "dashboards, workflow automation and stakeholder alignment.")
     evaluated=score_job(job(description=text),c)
     assert evaluated.eligible
-    assert evaluated.fit_score <= 74
+    assert evaluated.operational_alignment_score >= 80
+    assert evaluated.qualification_adjustment == -9
+    assert evaluated.fit_score == evaluated.operational_alignment_score - 9
     assert any("ethics_compliance" in n for n in evaluated.requirement_notes)
-    assert any("fit cap 74" in n for n in evaluated.score_breakdown)
+    assert not any("fit cap" in n for n in evaluated.score_breakdown)
+    assert any("mandatory qualification adjustment -9" in n for n in evaluated.score_breakdown)
 
 
 def test_required_public_procurement_and_channel_experience_explicit():
@@ -184,6 +187,10 @@ def test_old_adjacent_visible_in_dashboard_and_dedicated_csv(tmp_path):
     with adjacent_csv.open(newline="",encoding="utf-8") as f:
         rows=list(csv.DictReader(f))
     assert len(rows)==1 and rows[0]["review_only"]=="True"
+    assert rows[0]["operational_alignment_score"] == str(j.operational_alignment_score)
+    assert rows[0]["qualification_adjustment"] == str(j.qualification_adjustment)
+    assert "operational alignment" in dashboard
+    assert "adjusted fit" in dashboard
 
 
 def test_primary_exclusions_still_apply_to_adjacent():
