@@ -79,15 +79,45 @@ def _nonnegated(clause: str) -> bool:
 
 
 def _people_management(text: str) -> bool:
+    """Detect explicit current supervisory scope; not cross-functional influence.
+
+    Future/potential management and leadership without reports are flagged for
+    verification elsewhere rather than misclassified as automatic exclusions.
+    """
     patterns = (
         r"\b(?:have|has|with|supervise|manage|managing|lead|leading|oversee)\s+(?:\w+\s+){0,5}direct reports?\b",
         r"\bdirect reports?\s*:\s*[1-9]\d*\b",
+        r"\b(?:\d+\+?\s*years?\s+(?:of\s+)?)(?:direct\s+)?(?:people|personnel|line|staff)\s+management(?:\s+experience)?\b",
+        r"\b(?:\d+\+?\s*years?\s+(?:of\s+)?)(?:managing|supervising)\s+(?:a\s+)?team\b",
+        r"\b(?:direct\s+)?(?:people|personnel|line)\s+management\s+(?:experience\s+)?(?:is\s+)?(?:required|mandatory)\b",
         r"\b(?:manage|supervise|hire|develop|lead)\s+(?:a |the )?(?:team of|staff of|group of)\s*\d+\b",
-        r"\b(?:people management|line management|supervisory experience|personnel management)\s+(?:is\s+)?(?:required|mandatory|responsibility)\b",
-        r"\bresponsib(?:le|ility)\s+for\s+(?:hiring|managing|supervising)\s+(?:and\s+(?:managing|supervising)\s+)?(?:employees|staff|direct reports)\b",
+        r"\b(?:manage|supervise|coach|mentor|develop)\s+(?:and\s+(?:develop|mentor|coach)\s+)?"
+        r"(?:a\s+|the\s+|our\s+)?(?:team of\s+)?(?:staff|employees|direct reports|systems administrators)\b",
+        r"\b(?:managing|management of|supervising)\s+(?:a\s+|the\s+|our\s+)?"
+        r"team\s+of\s+(?:\w+\s+){0,4}(?:staff|analysts|administrators|specialists|professionals)\b",
+        r"\b(?:people management|line management|supervisory experience|personnel management)"
+        r"\s+(?:is\s+)?(?:required|mandatory|responsibility)\b",
+        r"\bresponsib(?:le|ility)\s+for\s+(?:hiring|managing|supervising)\s+"
+        r"(?:and\s+(?:managing|supervising)\s+)?(?:employees|staff|direct reports)\b",
+        r"\b(?:hiring|performance reviews?|performance management)\s+(?:and|,)\s+"
+        r"(?:coaching|developing|managing|supervising)\s+(?:a\s+|the\s+)?team\b",
     )
-    return any(_nonnegated(clause) and any(re.search(p, clause, re.I) for p in patterns)
-               for clause in _clauses(text))
+    for clause in _clauses(text):
+        if not _nonnegated(clause):
+            continue
+        if re.search(r"\b(?:in the future|future opportunity|eventually|may manage|may lead|"
+                     r"potentially manage|as (?:the )?team grows|could manage)\b", clause, re.I):
+            continue
+        if any(re.search(p, clause, re.I) for p in patterns):
+            return True
+    return False
+
+
+def _future_people_management(text: str) -> bool:
+    return bool(re.search(
+        r"\b(?:may|could|potentially|eventually)\s+(?:manage|supervise|hire)\b"
+        r"|\bas\s+(?:the\s+)?team\s+grows\b.{0,90}\b(?:manage|supervise|lead)\b",
+        text, re.I))
 
 
 def _travel_percent(text: str) -> float | None:
@@ -134,6 +164,8 @@ def constraint_result(job: Any, profile: dict[str, Any]) -> tuple[str, list[str]
     if profile.get("exclude_people_management"):
         if _people_management(desc):
             return "explicit direct-report / people-management duties", notes
+        if _future_people_management(desc):
+            notes.append("future people-management scope mentioned; confirm it will remain an IC role")
         notes.append("verify role has no direct reports or people-management obligations")
 
     ceiling = profile.get("max_travel_percent")
