@@ -13,7 +13,7 @@ from jobscout.app import write_outputs
 from jobscout.config import default_config, validate_config
 from jobscout.models import Job
 from jobscout.portable_compensation import location_compensation_review
-from jobscout.profiles import blank_profile
+from jobscout.profiles import blank_profile, salary_from_description
 from jobscout.scoring import score_job
 from jobscout.paths import RuntimePaths
 from jobscout.profile_constraints import constraint_result
@@ -192,3 +192,9 @@ def test_primary_exclusions_still_apply_to_adjacent():
     assert not j.eligible
     j=score_job(job(title="Sales Operations Manager",compensation="USD 100000-125000 annual base"),c)
     assert not j.eligible
+
+
+def test_ote_not_extracted_as_annual_base():
+    text = ("Annual base salary details are listed separately. "
+            "U.S. on-target earnings (OTE) range: $165,000 - $225,000 USD.")
+    assert salary_from_description(text) == ""
