@@ -64,10 +64,13 @@ def test_operational_alignment_retained_when_required_specialty_unassessed():
 
 def test_priority_starts_from_adjusted_fit_not_another_requirement_penalty():
     cfg=make_config()
-    raw=score_job(make_job(description=operations_text()),cfg)
+    # A deliberately older posting avoids the unrelated 100-point priority
+    # ceiling, allowing us to assert the exact qualification delta.
+    published = "2026-09-01T00:00:00+00:00"
+    raw=score_job(make_job(description=operations_text(),published_at=published),cfg)
     flagged=score_job(make_job(description=(
         "Required qualifications: Ethics and compliance experience. Responsibilities: " +
-        operations_text())),cfg)
+        operations_text()),published_at=published),cfg)
     raw=apply_freshness(raw,cfg,board_initialized=False,is_new=False)
     flagged=apply_freshness(flagged,cfg,board_initialized=False,is_new=False)
     assert raw.priority_score-flagged.priority_score == 9
