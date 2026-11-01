@@ -309,7 +309,8 @@ def render_html(jobs: list[Job], *, portable: bool = False) -> str:
             comp = f"<span>{html.escape(j.compensation)}</span>" if j.compensation else ""
             duplicate = f"<span>also: {html.escape(', '.join(j.also_found_on or []))}</span>" if j.also_found_on else ""
             lane_label = f'{j.lane_confidence}% lane confidence' if j.lane_confidence else 'profile rules; review required'
-            fit_label = f'{j.fit_score}% fit' if j.lane_confidence else f'{j.fit_score}/100 adjusted fit'
+            fit_label = (f'{j.fit_score}/100 adjusted fit' if portable else
+                         (f'{j.fit_score}% fit' if j.lane_confidence else f'{j.fit_score}/100 fit score'))
             alignment_html = (
                 f"<div class='alignment'>{j.operational_alignment_score}/100<br>operational alignment</div>"
                 f"<div class='qualification'>Specialty {j.qualification_adjustment:+d}</div>"
