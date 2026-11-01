@@ -121,7 +121,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
 
     with paths.eligible_csv.open("w", newline="", encoding="utf-8") as f:
         fields = [
-            "priority_score", "fit_score", "company", "title", "location", "workplace",
+            "priority_score", "fit_score", "operational_alignment_score", "qualification_adjustment", "company", "title", "location", "workplace",
             "employment_type", "freshness", "age_hours", "published_at", "publication_basis", "updated_at",
             "review_status", "availability", "availability_note", "availability_checked_at", "compensation", "role_lane", "lane_confidence", "match_path", "review_only", "requirement_notes", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on"
         ]
@@ -131,6 +131,8 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
             w.writerow({
                 "priority_score": j.priority_score,
                 "fit_score": j.fit_score,
+                "operational_alignment_score": j.operational_alignment_score,
+                "qualification_adjustment": j.qualification_adjustment,
                 "company": j.company,
                 "title": j.title,
                 "location": j.location,
@@ -173,7 +175,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
 
     with paths.jobs_csv.open("w", newline="", encoding="utf-8") as f:
         fields = [
-            "priority_score", "fit_score", "company", "title", "location", "workplace",
+            "priority_score", "fit_score", "operational_alignment_score", "qualification_adjustment", "company", "title", "location", "workplace",
             "employment_type", "freshness", "age_hours", "published_at", "publication_basis", "updated_at",
             "review_status", "availability", "availability_note", "availability_checked_at", "compensation", "role_lane", "lane_confidence", "match_path", "review_only", "requirement_notes", "apply_url", "reasons", "risks", "priority_reasons", "also_found_on"
         ]
@@ -183,6 +185,8 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
             w.writerow({
                 "priority_score": j.priority_score,
                 "fit_score": j.fit_score,
+                "operational_alignment_score": j.operational_alignment_score,
+                "qualification_adjustment": j.qualification_adjustment,
                 "company": j.company,
                 "title": j.title,
                 "location": j.location,
@@ -305,10 +309,15 @@ def render_html(jobs: list[Job], *, portable: bool = False) -> str:
             comp = f"<span>{html.escape(j.compensation)}</span>" if j.compensation else ""
             duplicate = f"<span>also: {html.escape(', '.join(j.also_found_on or []))}</span>" if j.also_found_on else ""
             lane_label = f'{j.lane_confidence}% lane confidence' if j.lane_confidence else 'profile rules; review required'
-            fit_label = f'{j.fit_score}% fit' if j.lane_confidence else f'{j.fit_score}/100 fit score'
+            fit_label = f'{j.fit_score}% fit' if j.lane_confidence else f'{j.fit_score}/100 adjusted fit'
+            alignment_html = (
+                f"<div class='alignment'>{j.operational_alignment_score}/100<br>operational alignment</div>"
+                f"<div class='qualification'>Specialty {j.qualification_adjustment:+d}</div>"
+                if portable else ""
+            )
             cards.append(f"""
             <article class='card'>
-              <div class='scores'><div class='priority'>{j.priority_score}</div><small>priority</small><div class='fit'>{fit_label}</div></div>
+              <div class='scores'><div class='priority'>{j.priority_score}</div><small>priority</small>{alignment_html}<div class='fit'>{fit_label}</div></div>
               <div class='body'>
                 <div class='topline'><span class='fresh'>{freshness_label(j)}</span><span class='age'>{age}</span><span class='source'>{html.escape(j.source)}</span></div>
                 <p><strong>{html.escape(review_status(j))}</strong> · Availability: {html.escape(j.availability)}<br><small>{html.escape(j.availability_note)} {html.escape(j.availability_checked_at)}</small></p>
@@ -333,8 +342,8 @@ def render_html(jobs: list[Job], *, portable: bool = False) -> str:
 *{{box-sizing:border-box}}body{{margin:0;background:linear-gradient(135deg,#07111f,#111827);color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif}}
 main{{max-width:1120px;margin:0 auto;padding:28px 18px 60px}}header{{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:8px}}h1{{font-size:34px;margin:0}}.subtitle{{color:var(--muted);margin-top:6px}}.stamp{{color:var(--muted);font-size:13px}}.summary{{color:#cbd5e1;font-size:13px;margin:8px 0 24px}}.section-head{{display:flex;justify-content:space-between;align-items:center;margin-top:28px;border-bottom:1px solid #263244;padding-bottom:7px}}.section-head h2{{font-size:20px;margin:0}}.section-head span{{color:var(--muted);font-size:13px}}
 .card{{display:grid;grid-template-columns:92px 1fr;background:rgba(17,24,39,.94);border:1px solid #263244;border-radius:16px;margin:14px 0;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.18)}}
-.scores{{padding:20px 14px;text-align:center;background:#0b1220;border-right:1px solid #263244}}.priority{{font-size:34px;font-weight:800;color:var(--cyan)}}.scores small{{color:var(--muted)}}.fit{{margin-top:12px;font-size:14px;color:#bbf7d0}}.body{{padding:19px 22px}}.topline{{display:flex;gap:10px;align-items:center;font-size:12px;text-transform:uppercase;letter-spacing:.06em}}.fresh{{font-weight:800;color:var(--green)}}.age,.source{{color:var(--muted)}}.body h2{{margin:8px 0 2px;font-size:23px}}h3{{margin:0 0 8px;color:#cbd5e1;font-weight:600}}.lane{{display:inline-block;background:#172033;border:1px solid #2b3b52;border-radius:999px;padding:5px 9px;font-size:12px;margin:2px 0 9px}}.lane span{{color:var(--muted);margin-left:6px}}.meta{{display:flex;flex-wrap:wrap;gap:7px 14px;color:var(--muted);font-size:14px}}.grid,.details-grid{{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}}ul{{margin:6px 0 0;padding-left:18px;color:#cbd5e1}}li{{margin:3px 0}}.risks strong{{color:var(--amber)}}details{{margin-top:13px;border-top:1px solid #263244;padding-top:10px}}summary{{cursor:pointer;color:#93c5fd;font-size:13px}}.apply{{display:inline-block;margin-top:16px;padding:9px 14px;background:#0e7490;color:white;border-radius:9px;text-decoration:none;font-weight:700}}.apply:hover{{background:#0891b2}}.empty{{padding:40px;background:var(--panel);border-radius:14px;color:var(--muted)}}@media(max-width:700px){{.card{{grid-template-columns:70px 1fr}}.grid,.details-grid{{grid-template-columns:1fr}}header{{display:block}}.stamp{{margin-top:8px}}}}
-</style></head><body><main><header><div><h1>JobScout <small style='font-size:14px;color:#94a3b8'>v{__version__}</small></h1><div class='subtitle'>Explainable job discovery based on your search preferences.</div></div><div class='stamp'>Updated {stamp}</div></header><div class='summary'>{html.escape(counts)} · Scores are review aids, not probabilities. Older adjacent roles remain visible for manual review, never alerts. Needs verification means unresolved requirements remain. <a href='scan-report.html'>Excluded postings and scan coverage</a></div>{''.join(sections)}</main></body></html>"""
+.scores{{padding:20px 14px;text-align:center;background:#0b1220;border-right:1px solid #263244}}.priority{{font-size:34px;font-weight:800;color:var(--cyan)}}.scores small{{color:var(--muted)}}.fit{{margin-top:8px;font-size:12px;color:#bbf7d0}}.alignment{{margin-top:10px;font-size:12px;line-height:1.35;color:#cbd5e1}}.qualification{{margin-top:5px;font-size:11px;color:#fbbf24}}.body{{padding:19px 22px}}.topline{{display:flex;gap:10px;align-items:center;font-size:12px;text-transform:uppercase;letter-spacing:.06em}}.fresh{{font-weight:800;color:var(--green)}}.age,.source{{color:var(--muted)}}.body h2{{margin:8px 0 2px;font-size:23px}}h3{{margin:0 0 8px;color:#cbd5e1;font-weight:600}}.lane{{display:inline-block;background:#172033;border:1px solid #2b3b52;border-radius:999px;padding:5px 9px;font-size:12px;margin:2px 0 9px}}.lane span{{color:var(--muted);margin-left:6px}}.meta{{display:flex;flex-wrap:wrap;gap:7px 14px;color:var(--muted);font-size:14px}}.grid,.details-grid{{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}}ul{{margin:6px 0 0;padding-left:18px;color:#cbd5e1}}li{{margin:3px 0}}.risks strong{{color:var(--amber)}}details{{margin-top:13px;border-top:1px solid #263244;padding-top:10px}}summary{{cursor:pointer;color:#93c5fd;font-size:13px}}.apply{{display:inline-block;margin-top:16px;padding:9px 14px;background:#0e7490;color:white;border-radius:9px;text-decoration:none;font-weight:700}}.apply:hover{{background:#0891b2}}.empty{{padding:40px;background:var(--panel);border-radius:14px;color:var(--muted)}}@media(max-width:700px){{.card{{grid-template-columns:70px 1fr}}.grid,.details-grid{{grid-template-columns:1fr}}header{{display:block}}.stamp{{margin-top:8px}}}}
+</style></head><body><main><header><div><h1>JobScout <small style='font-size:14px;color:#94a3b8'>v{__version__}</small></h1><div class='subtitle'>Explainable job discovery based on your search preferences.</div></div><div class='stamp'>Updated {stamp}</div></header><div class='summary'>{html.escape(counts)} · Priority uses adjusted fit; operational alignment is shown separately from mandatory-specialty deductions. Scores are review aids, not probabilities. Older adjacent roles remain visible for manual review, never alerts. Needs verification means unresolved requirements remain. <a href='scan-report.html'>Excluded postings and scan coverage</a></div>{''.join(sections)}</main></body></html>"""
 
 def notify(alerts: list[Job], paths: RuntimePaths, open_dashboard: bool = True) -> None:
     if not alerts:
