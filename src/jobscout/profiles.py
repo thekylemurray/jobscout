@@ -5,6 +5,7 @@ import re
 from typing import Any
 
 from .models import Job
+from .portable_compensation import location_compensation_review
 from .portable_requirements import assess_required_capabilities, validate_evidence
 from .profile_constraints import (STATE_CODES, constraint_result, matching_lane,
                                   validate_extended_profile)
@@ -244,6 +245,14 @@ def score_profile(job: Job, config: dict[str, Any]) -> Job:
             job.compensation = inferred
             salary = annual_usd(inferred)
             job.risks.append("pay period inferred as annual from labeled full-time USD pay range; verify")
+    # Inspect location-specific bands and inclusive OTE disclosures separately.
+    # Do not mistake an inapplicable SF maximum for Washington base pay.
+    if 'annual_min' not in override:
+        salary_violation, salary_notes = location_compensation_review(
+            desc, config['salary_floor'], p.get('home_state', ''))
+        if salary_violation:
+            return reject(salary_violation)
+        job.risks.extend(salary_notes)
     if salary and salary[1] < config['salary_floor']:
         return reject('USD salary range below minimum' + (' (annual period inferred)' if 'period inferred' in as_text(job.compensation) else ' (explicit annual)'))
     if salary and 'multiple geographic salary ranges' in as_text(job.compensation):
@@ -271,6 +280,17 @@ def score_profile(job: Job, config: dict[str, Any]) -> Job:
     # Adjacent roles are discovery aids, not auto-recommended opportunities.
     adjacent_adj = -8 if adjacent_match else 0
     job.fit_score = max(0, base_fit + adjustment + adjacent_adj)
+    # Generic operations evidence must not drown out explicitly mandatory
+    # specialty knowledge that the candidate has not confirmed.
+    if any('(not_demonstrated)' in note for note in specialty_notes):
+        job.fit_score = min(job.fit_score, 62)
+        detail.append('unmet mandatory specialty fit cap 62')
+    elif any('(unassessed)' in note for note in specialty_notes):
+        job.fit_score = min(job.fit_score, 74)
+        detail.append('unassessed mandatory specialty fit cap 74')
+    elif any('(transferable)' in note for note in specialty_notes):
+        job.fit_score = min(job.fit_score, 84)
+        detail.append('transferable mandatory specialty fit cap 84')
     if adjacent_match:
         job.fit_score = min(74, job.fit_score)
         job.risks.append('adjacent title: manual review only; verify senior individual-contributor scope')
