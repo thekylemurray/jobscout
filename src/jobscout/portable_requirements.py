@@ -15,6 +15,17 @@ CAPABILITIES: dict[str, str] = {
     "field_sales_revops": r"\b(?:field sales|sales forecasting|sales operations|revenue operations|revenue forecasting|quota planning|territory planning)\b",
     "partner_ecosystem": r"\b(?:partner economics|partner ecosystem|partner operations|partner programs|channel partners?|partner management platform|Impartner)\b",
     "platform_admin": r"\b(?:Salesforce|ServiceNow|SAP|Adobe Experience Cloud)\s+(?:administrator|admin|architect|developer)\b",
+    # Domain knowledge is not established by generic project/program expertise.
+    "ethics_compliance": r"\b(?:ethics\s*(?:and|&)\s*compliance|anti[- ]corruption|"
+                         r"trade compliance|conflicts? of interest|compliance investigations?|"
+                         r"corporate ethics|regulatory compliance program)\b",
+    "public_sector_procurement": r"\b(?:public[- ]sector procurement|"
+                                 r"government procurement|public sector contracting|"
+                                 r"public procurement|government contracting|"
+                                 r"federal acquisition regulation|public[- ]sector purchasing)\b",
+    "channel_distribution": r"\b(?:distributor operations?|channel distribution|"
+                            r"distribution (?:partner|channel) management|"
+                            r"distributor relationships?|channel partner operations?)\b",
 }
 VALID_STATUSES = {"demonstrated", "transferable", "unassessed", "not_demonstrated"}
 REQUIRED_INTRO = re.compile(
