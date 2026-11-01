@@ -107,10 +107,22 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
     ]
     visible.sort(key=lambda j: (j.priority_score, j.fit_score), reverse=True)
 
-    # Preserve the old fallback for primary jobs, but never allow review-only
-    # discovery results to masquerade as the sole primary recommendations.
-    if not visible and primary:
+    # Older primary roles are not automatically obsolete. Preserve explicitly
+    # available matches in a separate section rather than silently hiding them.
+    # Do not elevate roles with unverified or closed availability into this group.
+    older_primary = [
+        j for j in primary
+        if j.fit_score >= dash_min and j.age_hours is not None
+        and j.age_hours > dash_hours and j.availability == "Available"
+    ]
+    older_primary.sort(key=lambda j: (j.priority_score, j.fit_score), reverse=True)
+
+    # Keep the fallback only when no recent or still-listed primary matches exist.
+    # Never let adjacent-only discovery masquerade as a primary recommendation.
+    if not visible and not older_primary and primary:
         visible = sorted(primary, key=lambda j: (j.fit_score, j.priority_score), reverse=True)[:10]
+    if config.get("profile"):
+        visible.extend(older_primary[:25])
 
     # The adjacent-review window is independent of primary-job freshness.
     # Keep up to 25 recent-first discovery matches, including older postings.
@@ -282,16 +294,34 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 hist["alerted_at"] = rec["alerted_at"]
 
     save_json(paths.alerts, [asdict(j) for j in alerts])
-    paths.dashboard.write_text(render_html(visible, portable=bool(config.get('profile'))), encoding="utf-8")
+    paths.dashboard.write_text(
+        render_html(visible, portable=bool(config.get('profile')),
+                    primary_age_hours=dash_hours if config.get('profile') else None),
+        encoding="utf-8")
     return alerts
 
-def render_html(jobs: list[Job], *, portable: bool = False) -> str:
+def render_html(jobs: list[Job], *, portable: bool = False,
+                primary_age_hours: float | None = None) -> str:
     tier_order = ["🔥 Apply now", "🟢 Strong matches", "🟡 Worth reviewing", "🔵 Discovery"]
-    if portable:
+    dashboard_groups = portable and primary_age_hours is not None
+    if dashboard_groups:
+        tier_order = ['Primary matches — recent', 'Older primary matches — still listed',
+                      'Adjacent — manual review']
+    elif portable:
         tier_order = ['Worth reviewing', 'Needs verification', 'Adjacent — manual review', 'Excluded']
     buckets: dict[str, list[Job]] = {t: [] for t in tier_order}
     for j in jobs:
-        buckets[review_status(j) if portable else application_tier(j)].append(j)
+        if dashboard_groups:
+            if j.review_only:
+                category = 'Adjacent — manual review'
+            elif (j.age_hours is not None and j.age_hours > primary_age_hours
+                  and j.availability == 'Available'):
+                category = 'Older primary matches — still listed'
+            else:
+                category = 'Primary matches — recent'
+        else:
+            category = review_status(j) if portable else application_tier(j)
+        buckets[category].append(j)
 
     sections: list[str] = []
     for tier in tier_order:
@@ -331,7 +361,14 @@ def render_html(jobs: list[Job], *, portable: bool = False) -> str:
                 <a class='apply' href='{html.escape(j.apply_url or j.job_url)}' target='_blank' rel='noopener'>Open application →</a>
               </div>
             </article>""")
-        sections.append(f"<section><div class='section-head'><h2>{tier}</h2><span>{len(tier_jobs)} roles</span></div>{''.join(cards)}</section>")
+        note = ("<p class='section-note'>These postings are older than the primary "
+                "freshness window but were still listed when last checked. "
+                "Confirm they are accepting applications and meet every requirement.</p>"
+                if dashboard_groups and tier == 'Older primary matches — still listed' else
+                "<p class='section-note'>Adjacent titles are manual-review leads only, "
+                "not automatic recommendations.</p>"
+                if dashboard_groups and tier == 'Adjacent — manual review' else "")
+        sections.append(f"<section><div class='section-head'><h2>{tier}</h2><span>{len(tier_jobs)} roles</span></div>{note}{''.join(cards)}</section>")
 
     if not sections:
         sections.append("<div class='empty'>No credible matches above the dashboard threshold right now.</div>")
@@ -341,7 +378,7 @@ def render_html(jobs: list[Job], *, portable: bool = False) -> str:
 <title>JobScout</title><style>
 :root{{--bg:#0f172a;--panel:#111827;--soft:#1f2937;--text:#e5e7eb;--muted:#94a3b8;--green:#22c55e;--cyan:#22d3ee;--amber:#f59e0b;--red:#f87171}}
 *{{box-sizing:border-box}}body{{margin:0;background:linear-gradient(135deg,#07111f,#111827);color:var(--text);font-family:Inter,Segoe UI,Arial,sans-serif}}
-main{{max-width:1120px;margin:0 auto;padding:28px 18px 60px}}header{{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:8px}}h1{{font-size:34px;margin:0}}.subtitle{{color:var(--muted);margin-top:6px}}.stamp{{color:var(--muted);font-size:13px}}.summary{{color:#cbd5e1;font-size:13px;margin:8px 0 24px}}.section-head{{display:flex;justify-content:space-between;align-items:center;margin-top:28px;border-bottom:1px solid #263244;padding-bottom:7px}}.section-head h2{{font-size:20px;margin:0}}.section-head span{{color:var(--muted);font-size:13px}}
+main{{max-width:1120px;margin:0 auto;padding:28px 18px 60px}}header{{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:8px}}h1{{font-size:34px;margin:0}}.subtitle{{color:var(--muted);margin-top:6px}}.stamp{{color:var(--muted);font-size:13px}}.summary{{color:#cbd5e1;font-size:13px;margin:8px 0 24px}}.section-head{{display:flex;justify-content:space-between;align-items:center;margin-top:28px;border-bottom:1px solid #263244;padding-bottom:7px}}.section-head h2{{font-size:20px;margin:0}}.section-head span{{color:var(--muted);font-size:13px}}.section-note{{font-size:13px;color:var(--muted);margin:10px 0 16px;max-width:760px}}
 .card{{display:grid;grid-template-columns:92px 1fr;background:rgba(17,24,39,.94);border:1px solid #263244;border-radius:16px;margin:14px 0;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.18)}}
 .scores{{padding:20px 14px;text-align:center;background:#0b1220;border-right:1px solid #263244}}.priority{{font-size:34px;font-weight:800;color:var(--cyan)}}.scores small{{color:var(--muted)}}.fit{{margin-top:8px;font-size:12px;color:#bbf7d0}}.alignment{{margin-top:10px;font-size:12px;line-height:1.35;color:#cbd5e1}}.qualification{{margin-top:5px;font-size:11px;color:#fbbf24}}.body{{padding:19px 22px}}.topline{{display:flex;gap:10px;align-items:center;font-size:12px;text-transform:uppercase;letter-spacing:.06em}}.fresh{{font-weight:800;color:var(--green)}}.age,.source{{color:var(--muted)}}.body h2{{margin:8px 0 2px;font-size:23px}}h3{{margin:0 0 8px;color:#cbd5e1;font-weight:600}}.lane{{display:inline-block;background:#172033;border:1px solid #2b3b52;border-radius:999px;padding:5px 9px;font-size:12px;margin:2px 0 9px}}.lane span{{color:var(--muted);margin-left:6px}}.meta{{display:flex;flex-wrap:wrap;gap:7px 14px;color:var(--muted);font-size:14px}}.grid,.details-grid{{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}}ul{{margin:6px 0 0;padding-left:18px;color:#cbd5e1}}li{{margin:3px 0}}.risks strong{{color:var(--amber)}}details{{margin-top:13px;border-top:1px solid #263244;padding-top:10px}}summary{{cursor:pointer;color:#93c5fd;font-size:13px}}.apply{{display:inline-block;margin-top:16px;padding:9px 14px;background:#0e7490;color:white;border-radius:9px;text-decoration:none;font-weight:700}}.apply:hover{{background:#0891b2}}.empty{{padding:40px;background:var(--panel);border-radius:14px;color:var(--muted)}}@media(max-width:700px){{.card{{grid-template-columns:70px 1fr}}.grid,.details-grid{{grid-template-columns:1fr}}header{{display:block}}.stamp{{margin-top:8px}}}}
 </style></head><body><main><header><div><h1>JobScout <small style='font-size:14px;color:#94a3b8'>v{__version__}</small></h1><div class='subtitle'>Explainable job discovery based on your search preferences.</div></div><div class='stamp'>Updated {stamp}</div></header><div class='summary'>{html.escape(counts)} · Priority uses adjusted fit; operational alignment is shown separately from mandatory-specialty deductions. Scores are review aids, not probabilities. Older adjacent roles remain visible for manual review, never alerts. Needs verification means unresolved requirements remain. <a href='scan-report.html'>Excluded postings and scan coverage</a></div>{''.join(sections)}</main></body></html>"""
