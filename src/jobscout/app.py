@@ -119,7 +119,7 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
 
     # Keep the fallback only when no recent or still-listed primary matches exist.
     # Never let adjacent-only discovery masquerade as a primary recommendation.
-    if not visible and not older_primary and primary:
+    if not visible and (not config.get("profile") or not older_primary) and primary:
         visible = sorted(primary, key=lambda j: (j.fit_score, j.priority_score), reverse=True)[:10]
     if config.get("profile"):
         visible.extend(older_primary[:25])
