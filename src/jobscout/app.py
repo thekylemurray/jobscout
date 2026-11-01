@@ -99,16 +99,25 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
     # spending 30 seconds reviewing one extra candidate.
     all_eligible = sorted(jobs, key=lambda j: (j.fit_score, j.priority_score), reverse=True)
 
+    primary = [j for j in jobs if not j.review_only]
+    adjacent = [j for j in jobs if j.review_only]
     visible = [
-        j for j in jobs
-        if (j.fit_score >= dash_min or j.review_only) and (j.age_hours is None or j.age_hours <= dash_hours)
+        j for j in primary
+        if j.fit_score >= dash_min and (j.age_hours is None or j.age_hours <= dash_hours)
     ]
     visible.sort(key=lambda j: (j.priority_score, j.fit_score), reverse=True)
 
-    # Never produce a blank dashboard when the matcher found plausible roles.
-    # If every candidate falls just below the review threshold, show the best ten.
-    if not visible and all_eligible:
-        visible = all_eligible[:10]
+    # Preserve the old fallback for primary jobs, but never allow review-only
+    # discovery results to masquerade as the sole primary recommendations.
+    if not visible and primary:
+        visible = sorted(primary, key=lambda j: (j.fit_score, j.priority_score), reverse=True)[:10]
+
+    # The adjacent-review window is independent of primary-job freshness.
+    # Keep up to 25 recent-first discovery matches, including older postings.
+    if config.get('profile') and adjacent:
+        review_rows = sorted(adjacent, key=lambda j: (
+            j.age_hours if j.age_hours is not None else float('inf'), -j.priority_score))
+        visible.extend(review_rows[:25])
 
     with paths.eligible_csv.open("w", newline="", encoding="utf-8") as f:
         fields = [
@@ -148,6 +157,19 @@ def write_outputs(jobs: list[Job], rejected: list[Job], config: dict[str, Any], 
                 "priority_reasons": "; ".join(j.priority_reasons or []),
                 "also_found_on": "; ".join(j.also_found_on or []),
             })
+
+    # A dedicated export keeps older adjacent opportunities visible outside the
+    # freshness-limited primary dashboard. These are not application alerts.
+    if config.get('profile'):
+        with paths.eligible_csv.open("r", newline="", encoding="utf-8") as source_file:
+            reader = csv.DictReader(source_file)
+            headers = reader.fieldnames or []
+            adjacent_rows = [row for row in reader if row.get("review_only") == "True"]
+        with (paths.output_dir / "adjacent_review.csv").open(
+                "w", newline="", encoding="utf-8") as adjacent_file:
+            writer = csv.DictWriter(adjacent_file, fieldnames=headers)
+            writer.writeheader()
+            writer.writerows(adjacent_rows)
 
     with paths.jobs_csv.open("w", newline="", encoding="utf-8") as f:
         fields = [
@@ -312,7 +334,7 @@ def render_html(jobs: list[Job], *, portable: bool = False) -> str:
 main{{max-width:1120px;margin:0 auto;padding:28px 18px 60px}}header{{display:flex;justify-content:space-between;gap:20px;align-items:end;margin-bottom:8px}}h1{{font-size:34px;margin:0}}.subtitle{{color:var(--muted);margin-top:6px}}.stamp{{color:var(--muted);font-size:13px}}.summary{{color:#cbd5e1;font-size:13px;margin:8px 0 24px}}.section-head{{display:flex;justify-content:space-between;align-items:center;margin-top:28px;border-bottom:1px solid #263244;padding-bottom:7px}}.section-head h2{{font-size:20px;margin:0}}.section-head span{{color:var(--muted);font-size:13px}}
 .card{{display:grid;grid-template-columns:92px 1fr;background:rgba(17,24,39,.94);border:1px solid #263244;border-radius:16px;margin:14px 0;overflow:hidden;box-shadow:0 10px 30px rgba(0,0,0,.18)}}
 .scores{{padding:20px 14px;text-align:center;background:#0b1220;border-right:1px solid #263244}}.priority{{font-size:34px;font-weight:800;color:var(--cyan)}}.scores small{{color:var(--muted)}}.fit{{margin-top:12px;font-size:14px;color:#bbf7d0}}.body{{padding:19px 22px}}.topline{{display:flex;gap:10px;align-items:center;font-size:12px;text-transform:uppercase;letter-spacing:.06em}}.fresh{{font-weight:800;color:var(--green)}}.age,.source{{color:var(--muted)}}.body h2{{margin:8px 0 2px;font-size:23px}}h3{{margin:0 0 8px;color:#cbd5e1;font-weight:600}}.lane{{display:inline-block;background:#172033;border:1px solid #2b3b52;border-radius:999px;padding:5px 9px;font-size:12px;margin:2px 0 9px}}.lane span{{color:var(--muted);margin-left:6px}}.meta{{display:flex;flex-wrap:wrap;gap:7px 14px;color:var(--muted);font-size:14px}}.grid,.details-grid{{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}}ul{{margin:6px 0 0;padding-left:18px;color:#cbd5e1}}li{{margin:3px 0}}.risks strong{{color:var(--amber)}}details{{margin-top:13px;border-top:1px solid #263244;padding-top:10px}}summary{{cursor:pointer;color:#93c5fd;font-size:13px}}.apply{{display:inline-block;margin-top:16px;padding:9px 14px;background:#0e7490;color:white;border-radius:9px;text-decoration:none;font-weight:700}}.apply:hover{{background:#0891b2}}.empty{{padding:40px;background:var(--panel);border-radius:14px;color:var(--muted)}}@media(max-width:700px){{.card{{grid-template-columns:70px 1fr}}.grid,.details-grid{{grid-template-columns:1fr}}header{{display:block}}.stamp{{margin-top:8px}}}}
-</style></head><body><main><header><div><h1>JobScout <small style='font-size:14px;color:#94a3b8'>v{__version__}</small></h1><div class='subtitle'>Explainable job discovery based on your search preferences.</div></div><div class='stamp'>Updated {stamp}</div></header><div class='summary'>{html.escape(counts)} · Scores are review aids, not probabilities. Needs verification means unresolved requirements remain. <a href='scan-report.html'>Excluded postings and scan coverage</a></div>{''.join(sections)}</main></body></html>"""
+</style></head><body><main><header><div><h1>JobScout <small style='font-size:14px;color:#94a3b8'>v{__version__}</small></h1><div class='subtitle'>Explainable job discovery based on your search preferences.</div></div><div class='stamp'>Updated {stamp}</div></header><div class='summary'>{html.escape(counts)} · Scores are review aids, not probabilities. Older adjacent roles remain visible for manual review, never alerts. Needs verification means unresolved requirements remain. <a href='scan-report.html'>Excluded postings and scan coverage</a></div>{''.join(sections)}</main></body></html>"""
 
 def notify(alerts: list[Job], paths: RuntimePaths, open_dashboard: bool = True) -> None:
     if not alerts:
