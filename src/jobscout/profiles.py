@@ -122,7 +122,7 @@ def salary_from_description(description: str) -> str:
         if not re.search(r'\bUSD\b|US\$|\$', nearby, re.I):
             continue
         if re.search(r'\b(?:hourly|per hour|/hr|per month|per week|'
-                     r'bonus range|equity range|total compensation range)\b',
+                     r'bonus range|equity range|total compensation range|on[- ]target earnings|OTE)\b',
                      text[max(0, match.start()-50):match.start()], re.I):
             continue
         amounts = []
