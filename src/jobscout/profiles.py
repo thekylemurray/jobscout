@@ -189,6 +189,7 @@ def score_profile(job: Job, config: dict[str, Any]) -> Job:
     job.reasons, job.risks, job.score_breakdown = [], [], []
     job.role_lane = p['name']
     job.fit_score = job.priority_score = 0
+    job.operational_alignment_score = job.qualification_adjustment = 0
     job.eligible, job.veto_reason = True, ''
     job.review_only, job.match_path, job.requirement_notes = False, 'target', []
 
@@ -275,30 +276,28 @@ def score_profile(job: Job, config: dict[str, Any]) -> Job:
     hits = skill_signals(desc, list(dict.fromkeys(p['core_skills'] + lane_skills)))
     base_fit = min(96, 50 + 6 * len(hits))
     specialty_notes, adjustment, detail = assess_required_capabilities(desc, p)
+    job.operational_alignment_score = base_fit
+    job.qualification_adjustment = adjustment
     job.requirement_notes = specialty_notes
     job.risks.extend(specialty_notes)
-    # Adjacent roles are discovery aids, not auto-recommended opportunities.
+
+    # Each uncertain required specialty is deducted *once*. The original
+    # operational alignment remains visible; there are no additional specialty
+    # score ceilings masking meaningful differences between jobs.
     adjacent_adj = -8 if adjacent_match else 0
-    job.fit_score = max(0, base_fit + adjustment + adjacent_adj)
-    # Generic operations evidence must not drown out explicitly mandatory
-    # specialty knowledge that the candidate has not confirmed.
-    if any('(not_demonstrated)' in note for note in specialty_notes):
-        job.fit_score = min(job.fit_score, 62)
-        detail.append('unmet mandatory specialty fit cap 62')
-    elif any('(unassessed)' in note for note in specialty_notes):
-        job.fit_score = min(job.fit_score, 74)
-        detail.append('unassessed mandatory specialty fit cap 74')
-    elif any('(transferable)' in note for note in specialty_notes):
-        job.fit_score = min(job.fit_score, 84)
-        detail.append('transferable mandatory specialty fit cap 84')
+    job.fit_score = max(0, min(100, base_fit + adjustment + adjacent_adj))
     if adjacent_match:
-        job.fit_score = min(74, job.fit_score)
         job.risks.append('adjacent title: manual review only; verify senior individual-contributor scope')
     job.lane_confidence = 0  # portable matcher does not estimate lane confidence
     job.reasons = ['adjacent title; manual review only' if adjacent_match else 'target title matched'] + [f'experience signal: {category} (matched: {evidence})' for category, evidence in hits.items()]
-    job.score_breakdown = ['title base +50', f'{len(hits)} distinct skill categories +{6 * len(hits)} (cap 96)'] + detail
+    job.score_breakdown = [
+        'operational alignment base +50',
+        f'{len(hits)} distinct skill categories +{6 * len(hits)} (alignment cap 96)',
+        f'operational alignment {base_fit}/100',
+    ] + detail + [f'mandatory qualification adjustment {adjustment:+d}']
     if adjacent_match:
-        job.score_breakdown.append('adjacent title -8 (capped at 74; review-only)')
+        job.score_breakdown.append('adjacent review-only title -8 (not eligible for automatic alerts)')
+    job.score_breakdown.append(f'adjusted fit {job.fit_score}/100 = alignment + qualification adjustment + adjacent adjustment')
     if any(has_term(job.company, x) for x in p['preferred_companies']):
         job.reasons.append('preferred employer')
     return job
