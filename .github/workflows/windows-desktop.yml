@@ -21,6 +21,8 @@ jobs:
         run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name JobScout packaging/desktop_entry.py
       - name: Smoke test native window
         run: python packaging/smoke_desktop.py
+      - name: Smoke test clean Windows profile import and restart
+        run: python packaging/smoke_clean_install.py
       - name: Check executable launches
         shell: pwsh
         run: |
